@@ -1,0 +1,95 @@
+name: Build Tauri App
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: cargo tauri build --target ${{ matrix.target }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clothes-shop-pos-${{ matrix.os }}-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/
+            src-tauri/target/release/bundle/
+          retention-days: 30
+
+      - name: Create Release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            src-tauri/target/${{ matrix.target }}/release/clothes-shop-pos.exe
+            src-tauri/target/${{ matrix.target }}/release/clothes-shop-pos
+            src-tauri/target/release/bundle/**/*.app
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.AppImage
+          tag_name: v${{ github.run_number }}
+          name: Release v${{ github.run_number }}
+          body: |
+            Automated build for clothes-shop-pos
+            
+            **Platforms:**
+            - macOS (Intel & Apple Silicon)
+            - Windows
+            - Linux
+            
+            **Features:**
+            - Complete POS system
+            - 15-day trial license system
+            - SQLite database
+            - Modern React UI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

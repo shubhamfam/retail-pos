@@ -18,8 +18,8 @@ const sampleCustomers: Customer[] = [
     email: 'john.doe@email.com',
     address: '123 Main Street, Mumbai',
     birthday: '1990-05-15',
-    loyaltyPoints: 150,
-    createdAt: new Date().toISOString(),
+    loyalty_points: 150,
+    created_at: new Date().toISOString(),
   },
   {
     id: 2,
@@ -28,8 +28,8 @@ const sampleCustomers: Customer[] = [
     email: 'jane.smith@email.com',
     address: '456 Oak Avenue, Delhi',
     birthday: '1988-12-20',
-    loyaltyPoints: 75,
-    createdAt: new Date().toISOString(),
+    loyalty_points: 75,
+    created_at: new Date().toISOString(),
   },
   {
     id: 3,
@@ -38,8 +38,8 @@ const sampleCustomers: Customer[] = [
     email: 'mike.johnson@email.com',
     address: '789 Pine Road, Bangalore',
     birthday: '1992-08-10',
-    loyaltyPoints: 200,
-    createdAt: new Date().toISOString(),
+    loyalty_points: 200,
+    created_at: new Date().toISOString(),
   },
 ];
 

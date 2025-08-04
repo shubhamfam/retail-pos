@@ -395,7 +395,7 @@ const Reports: React.FC<ReportsProps> = ({ setCurrentPage }) => {
                     #{sale.id}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {getCustomerName(sale.customerId)}
+                    {getCustomerName(sale.customer_id)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {formatCurrency(sale.total_amount)}

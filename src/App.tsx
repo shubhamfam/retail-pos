@@ -19,8 +19,7 @@ import './App.css';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
+  // Removed unused state variables
   const [user, setUser] = useState<User | null>(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [licenseChecked, setLicenseChecked] = useState(false);

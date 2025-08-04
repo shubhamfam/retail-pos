@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DatabaseService } from '../../services/databaseService';
-import { Product, Customer, Sale, SalespersonStats } from '../../types';
+import { Product, Sale, SalespersonStats } from '../../types';
 
 interface DashboardStats {
   totalProducts: number;
