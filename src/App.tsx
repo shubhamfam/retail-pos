@@ -11,8 +11,10 @@ import Settings from './pages/Settings/Settings';
 import Sales from './pages/Sales/Sales';
 import Salesperson from './pages/Salesperson/Salesperson';
 import Login from './pages/Auth/Login';
+import License from './pages/License/License';
 import { User } from './types';
 import { useKeyboardShortcuts, createNavigationShortcuts } from './hooks/useKeyboardShortcuts';
+import { invoke } from '@tauri-apps/api/core';
 import './App.css';
 
 const App: React.FC = () => {
@@ -21,6 +23,9 @@ const App: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [user, setUser] = useState<User | null>(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const [licenseChecked, setLicenseChecked] = useState(false);
+  const [licenseExpired, setLicenseExpired] = useState(false);
+  const [hasActiveLicense, setHasActiveLicense] = useState(false);
 
   const handleLogin = (loggedInUser: User) => {
     console.log('Login: Setting user:', loggedInUser);
@@ -31,6 +36,42 @@ const App: React.FC = () => {
     setUser(null);
     setCurrentPage('dashboard');
   };
+
+  // Check license status on app start
+  useEffect(() => {
+    const checkLicense = async () => {
+      try {
+        // Create predefined licenses if they don't exist
+        await invoke('create_predefined_licenses');
+        
+        // Get active license
+        const activeLicense = await invoke<any>('get_active_license');
+        const hasLicense = activeLicense !== null;
+        console.log('App: License check - activeLicense:', activeLicense, 'hasLicense:', hasLicense);
+        setHasActiveLicense(hasLicense);
+        
+        if (hasLicense) {
+          // Check if license is expired
+          const expired = await invoke<boolean>('is_license_expired');
+          console.log('App: License check - expired:', expired);
+          setLicenseExpired(expired);
+        } else {
+          console.log('App: License check - no license found');
+          setLicenseExpired(false); // No license, not expired
+        }
+        
+        setLicenseChecked(true);
+      } catch (error) {
+        console.error('Error checking license:', error);
+        // If there's an error, assume no license and show activation screen
+        setHasActiveLicense(false);
+        setLicenseExpired(false);
+        setLicenseChecked(true);
+      }
+    };
+
+    checkLicense();
+  }, []);
 
   // Global keyboard shortcuts
   useKeyboardShortcuts({
@@ -73,6 +114,11 @@ const App: React.FC = () => {
         return <Salesperson setCurrentPage={setCurrentPage} />;
       case 'settings':
         return <Settings setCurrentPage={setCurrentPage} />;
+      case 'license':
+        return <License setCurrentPage={setCurrentPage} onLicenseActivated={() => {
+          setLicenseExpired(false);
+          setCurrentPage('dashboard');
+        }} />;
       default:
         return <Dashboard setCurrentPage={setCurrentPage} />;
     }
@@ -80,6 +126,26 @@ const App: React.FC = () => {
 
   // Debug user state
   console.log('App: Current user state:', user);
+  console.log('App: License state - hasActiveLicense:', hasActiveLicense, 'licenseExpired:', licenseExpired, 'licenseChecked:', licenseChecked);
+  
+  // Show loading while checking license
+  if (!licenseChecked) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-lg">Checking license...</div>
+      </div>
+    );
+  }
+  
+  // If no active license or license is expired, show license page
+  if (!hasActiveLicense || licenseExpired) {
+    console.log('App: Showing license page - hasActiveLicense:', hasActiveLicense, 'licenseExpired:', licenseExpired);
+    return <License setCurrentPage={setCurrentPage} onLicenseActivated={() => {
+      setHasActiveLicense(true);
+      setLicenseExpired(false);
+      setCurrentPage('dashboard');
+    }} />;
+  }
   
   // If user is not authenticated, show login
   if (!user) {
@@ -189,6 +255,14 @@ const App: React.FC = () => {
               }`}
             >
               ⚙️ Settings
+            </button>
+            <button
+              onClick={() => setCurrentPage('license')}
+              className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
+                currentPage === 'license' ? 'bg-blue-600' : 'hover:bg-gray-700'
+              }`}
+            >
+              🔑 License
             </button>
           </nav>
         </div>

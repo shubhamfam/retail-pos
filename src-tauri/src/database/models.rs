@@ -110,6 +110,17 @@ pub struct Supplier {
     pub address: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct License {
+    pub id: Option<i32>,
+    pub license_key: String,
+    pub license_type: String,
+    pub is_active: bool,
+    pub activated_at: Option<String>,
+    pub expires_at: Option<String>,
+    pub created_at: Option<String>,
+}
+
 // Helper functions to convert from database rows
 impl Product {
     pub fn from_row(row: &Row) -> rusqlite::Result<Self> {

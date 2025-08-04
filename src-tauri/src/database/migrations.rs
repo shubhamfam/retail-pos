@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-pub const CURRENT_VERSION: u32 = 4;
+pub const CURRENT_VERSION: u32 = 5;
 
 pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     let current_version = get_current_version(conn)?;
@@ -16,6 +16,9 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     }
     if current_version < 4 {
         run_migration_4(conn)?;
+    }
+    if current_version < 5 {
+        run_migration_5(conn)?;
     }
     
     Ok(())
@@ -70,6 +73,37 @@ fn run_migration_4(conn: &Connection) -> Result<(), rusqlite::Error> {
     )?;
 
     println!("Migration 4 completed successfully");
+    Ok(())
+}
+
+pub fn run_migration_5(conn: &Connection) -> Result<(), rusqlite::Error> {
+    println!("Running migration 5: Adding licenses table");
+    
+    // Create licenses table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS licenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            license_key TEXT UNIQUE NOT NULL,
+            license_type TEXT NOT NULL,
+            is_active BOOLEAN DEFAULT 1,
+            activated_at DATETIME,
+            expires_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+    
+    // Create license indexes
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_licenses_key ON licenses(license_key)", [])?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_licenses_active ON licenses(is_active)", [])?;
+
+    // Update version
+    conn.execute(
+        "INSERT OR REPLACE INTO db_version (version) VALUES (?)",
+        [5],
+    )?;
+
+    println!("Migration 5 completed successfully");
     Ok(())
 }
 

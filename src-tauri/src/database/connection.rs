@@ -693,4 +693,217 @@ impl SalespersonService {
 
         result_iter.collect()
     }
+}
+
+pub struct LicenseService {
+    connection: Arc<Mutex<Connection>>,
+}
+
+impl LicenseService {
+    pub fn new(connection: Arc<Mutex<Connection>>) -> Self {
+        Self { connection }
+    }
+
+    pub fn validate_license(&self, license_key: &str) -> Result<Option<License>> {
+        let connection = self.connection.lock().unwrap();
+        let mut stmt = connection.prepare(
+            "SELECT id, license_key, license_type, is_active, activated_at, expires_at, created_at 
+             FROM licenses 
+             WHERE license_key = ? AND is_active = 1"
+        )?;
+        
+        let mut rows = stmt.query_map([license_key], |row| {
+            Ok(License {
+                id: row.get(0)?,
+                license_key: row.get(1)?,
+                license_type: row.get(2)?,
+                is_active: row.get(3)?,
+                activated_at: row.get(4)?,
+                expires_at: row.get(5)?,
+                created_at: row.get(6)?,
+            })
+        })?;
+        
+        if let Some(row) = rows.next() {
+            Ok(Some(row?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn activate_license(&self, license_key: &str) -> Result<()> {
+        let connection = self.connection.lock().unwrap();
+        
+        // Check if license exists and is not already activated
+        let mut stmt = connection.prepare(
+            "SELECT id FROM licenses WHERE license_key = ? AND is_active = 1 AND activated_at IS NULL"
+        )?;
+        
+        let mut rows = stmt.query_map([license_key], |row| row.get::<_, i32>(0))?;
+        
+        if let Some(row) = rows.next() {
+            let license_id: i32 = row?;
+            
+            // Calculate expiration date (15 days from now)
+            let expires_at = chrono::Utc::now() + chrono::Duration::days(15);
+            let expires_at_str = expires_at.format("%Y-%m-%d %H:%M:%S").to_string();
+            let activated_at = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            
+            println!("Debug: Setting activation date: '{}'", activated_at);
+            println!("Debug: Setting expiration date: '{}'", expires_at_str);
+            
+            // Update license with activation date and expiration
+            let mut update_stmt = connection.prepare(
+                "UPDATE licenses SET activated_at = ?, expires_at = ? WHERE id = ?"
+            )?;
+            
+            update_stmt.execute(params![activated_at, expires_at_str, license_id])?;
+            
+            println!("License activated successfully: {} -> expires at {}", license_key, expires_at_str);
+            Ok(())
+        } else {
+            // Check if license exists but is already activated
+            let mut check_stmt = connection.prepare(
+                "SELECT id FROM licenses WHERE license_key = ? AND is_active = 1 AND activated_at IS NOT NULL"
+            )?;
+            
+            let mut check_rows = check_stmt.query_map([license_key], |row| row.get::<_, i32>(0))?;
+            
+            if check_rows.next().is_some() {
+                Err(rusqlite::Error::InvalidParameterName("License already activated".to_string()))
+            } else {
+                Err(rusqlite::Error::InvalidParameterName("License not found".to_string()))
+            }
+        }
+    }
+
+    pub fn get_active_license(&self) -> Result<Option<License>> {
+        let connection = self.connection.lock().unwrap();
+        
+        // First, let's see what licenses exist
+        let mut debug_stmt = connection.prepare(
+            "SELECT id, license_key, license_type, is_active, activated_at, expires_at FROM licenses"
+        )?;
+        
+        let debug_rows = debug_stmt.query_map([], |row| {
+            Ok(format!("ID: {}, Key: {}, Type: {}, Active: {}, Activated: {}, Expires: {}", 
+                row.get::<_, i32>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, bool>(3)?,
+                row.get::<_, Option<String>>(4)?.unwrap_or_else(|| "NULL".to_string()),
+                row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "NULL".to_string())
+            ))
+        })?;
+        
+        println!("=== Debug: All licenses in database ===");
+        for row in debug_rows {
+            println!("{}", row?);
+        }
+        println!("=== End debug ===");
+        
+        let mut stmt = connection.prepare(
+            "SELECT id, license_key, license_type, is_active, activated_at, expires_at, created_at 
+             FROM licenses 
+             WHERE is_active = 1 AND activated_at IS NOT NULL 
+             ORDER BY activated_at DESC 
+             LIMIT 1"
+        )?;
+        
+        let mut rows = stmt.query_map([], |row| {
+            Ok(License {
+                id: row.get(0)?,
+                license_key: row.get(1)?,
+                license_type: row.get(2)?,
+                is_active: row.get(3)?,
+                activated_at: row.get(4)?,
+                expires_at: row.get(5)?,
+                created_at: row.get(6)?,
+            })
+        })?;
+        
+        if let Some(row) = rows.next() {
+            let license = row?;
+            println!("Found active license: {}", license.license_key);
+            Ok(Some(license))
+        } else {
+            println!("No active license found");
+            Ok(None)
+        }
+    }
+
+    pub fn is_license_expired(&self) -> Result<bool> {
+        let connection = self.connection.lock().unwrap();
+        let mut stmt = connection.prepare(
+            "SELECT expires_at FROM licenses 
+             WHERE is_active = 1 AND activated_at IS NOT NULL 
+             ORDER BY activated_at DESC 
+             LIMIT 1"
+        )?;
+        
+        let mut rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        
+        if let Some(row) = rows.next() {
+            let expires_at_str: String = row?;
+            println!("Debug: Parsing expiration date: '{}'", expires_at_str);
+            
+            // Try multiple date formats
+            let expires_at = chrono::NaiveDateTime::parse_from_str(&expires_at_str, "%Y-%m-%d %H:%M:%S")
+                .map(|ndt| chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(ndt, chrono::Utc))
+                .or_else(|_| chrono::DateTime::parse_from_str(&expires_at_str, "%Y-%m-%d %H:%M:%S")
+                    .map(|dt| dt.with_timezone(&chrono::Utc)))
+                .or_else(|_| chrono::DateTime::parse_from_str(&expires_at_str, "%Y-%m-%d %H:%M:%S%.f")
+                    .map(|dt| dt.with_timezone(&chrono::Utc)))
+                .or_else(|_| chrono::DateTime::parse_from_str(&expires_at_str, "%Y-%m-%d %H:%M:%S%z")
+                    .map(|dt| dt.with_timezone(&chrono::Utc)))
+                .or_else(|_| chrono::DateTime::parse_from_str(&expires_at_str, "%Y-%m-%d %H:%M:%S%.f%z")
+                    .map(|dt| dt.with_timezone(&chrono::Utc)))
+                .map_err(|_| {
+                    println!("Debug: Failed to parse date '{}' with any format", expires_at_str);
+                    rusqlite::Error::InvalidParameterName(format!("Invalid date format: {}", expires_at_str))
+                })?;
+            
+            let now = chrono::Utc::now();
+            let is_expired = now > expires_at;
+            println!("Debug: License expires at {}, now is {}, expired: {}", expires_at, now, is_expired);
+            Ok(is_expired)
+        } else {
+            println!("Debug: No active license found");
+            Ok(false) // No active license found, not expired (user can activate)
+        }
+    }
+
+    pub fn create_predefined_licenses(&self) -> Result<()> {
+        let connection = self.connection.lock().unwrap();
+        
+        // Check if licenses already exist
+        let count: i32 = connection.query_row(
+            "SELECT COUNT(*) FROM licenses",
+            [],
+            |row| row.get(0)
+        )?;
+        
+        if count > 0 {
+            return Ok(()); // Licenses already exist
+        }
+        
+        // Create predefined trial licenses
+        let trial_keys = vec![
+            "TRIAL-2024-001-ABCD",
+            "TRIAL-2024-002-EFGH", 
+            "TRIAL-2024-003-IJKL",
+            "TRIAL-2024-004-MNOP",
+            "TRIAL-2024-005-QRST"
+        ];
+        
+        let mut stmt = connection.prepare(
+            "INSERT INTO licenses (license_key, license_type, is_active) VALUES (?, 'trial', 1)"
+        )?;
+        
+        for key in trial_keys {
+            stmt.execute([key])?;
+        }
+        
+        Ok(())
+    }
 } 
