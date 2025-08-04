@@ -7,9 +7,9 @@ use tauri::{AppHandle, Manager};
 use database::{Database, connection::{ProductService, CustomerService, SaleService, UserService, SalespersonService, LicenseService}};
 use database::models::*;
 use serde::Deserialize;
-use std::sync::{Arc, Mutex};
+// use std::sync::{Arc, Mutex};
 use std::fs;
-use std::path::PathBuf;
+// use std::path::PathBuf;
 use chrono::{DateTime, Utc};
 
 #[derive(Deserialize)]
@@ -490,7 +490,7 @@ async fn update_salesperson(
 }
 
 #[tauri::command]
-async fn save_receipt(app_handle: AppHandle, receipt_content: String, sale_id: i32) -> Result<String, String> {
+async fn save_receipt(_app_handle: AppHandle, receipt_content: String, sale_id: i32) -> Result<String, String> {
     // Get the user's Documents directory path
     let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
     let mut docs_path = home_dir;
