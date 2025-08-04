@@ -2,9 +2,9 @@ name: Build Tauri App (Simple)
 
 on:
   push:
-    branches: [ v1-licensing ]
+    branches: [ main, master, v1-licensing ]
   pull_request:
-    branches: [ v1-licensing ]
+    branches: [ main, master, v1-licensing ]
   workflow_dispatch:
 
 jobs:
