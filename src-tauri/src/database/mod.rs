@@ -2,6 +2,7 @@ pub mod connection;
 pub mod models;
 pub mod schema;
 pub mod migrations;
+pub mod import_export;
 
 use rusqlite::{Connection, Result};
 use std::sync::{Arc, Mutex};

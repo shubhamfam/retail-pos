@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Sale, Customer } from '../../types';
+import { Sale, Customer, SaleItem } from '../../types';
 import { DatabaseService } from '../../services/databaseService';
+import { ReceiptService } from '../../services/receiptService';
 
 interface SalesProps {
   setCurrentPage: (page: string) => void;
@@ -19,6 +20,9 @@ const Sales: React.FC<SalesProps> = ({ setCurrentPage }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSale, setSelectedSale] = useState<SalesWithDetails | null>(null);
   const [showSaleDetails, setShowSaleDetails] = useState(false);
+  const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
+  const [showBill, setShowBill] = useState(false);
+  const [loadingItems, setLoadingItems] = useState(false);
 
   useEffect(() => {
     loadSales();
@@ -107,6 +111,66 @@ const Sales: React.FC<SalesProps> = ({ setCurrentPage }) => {
   const handleCloseDetails = () => {
     setShowSaleDetails(false);
     setSelectedSale(null);
+  };
+
+  const handleViewBill = async (sale: SalesWithDetails) => {
+    try {
+      setLoadingItems(true);
+      setSelectedSale(sale);
+      
+      // Fetch sale items
+      const items = await DatabaseService.getSaleItems(sale.id);
+      setSaleItems(items);
+      
+      setShowBill(true);
+    } catch (error) {
+      console.error('Error loading sale items:', error);
+      alert('Error loading bill details');
+    } finally {
+      setLoadingItems(false);
+    }
+  };
+
+  const handlePrintBill = async () => {
+    if (!selectedSale || saleItems.length === 0) return;
+
+    try {
+      // Get customer details
+      const customer = customers.find(c => c.id === selectedSale.customer_id);
+      
+      // Prepare receipt data
+      const receiptData = {
+        sale: selectedSale,
+        customer: customer,
+        items: saleItems.map(item => ({
+          productName: `Product ${item.product_variant_id}`, // We'll need to get actual product names
+          variant: `Variant ${item.product_variant_id}`,
+          quantity: item.quantity,
+          unitPrice: item.unit_price,
+          total: item.total,
+        })),
+        storeInfo: {
+          name: "Clothes Shop",
+          address: "123 Main Street, Mumbai, Maharashtra",
+          phone: "+91 98765 43210",
+          email: "info@clothesshop.com",
+          gstNumber: "GST123456789",
+        },
+      };
+
+      // Generate and print receipt
+      await ReceiptService.printReceipt(receiptData);
+      alert('Bill printed successfully!');
+    } catch (error) {
+      console.error('Error printing bill:', error);
+      alert('Error printing bill');
+    }
+  };
+
+  const handleCloseBill = () => {
+    setShowBill(false);
+    setSelectedSale(null);
+    setSaleItems([]);
   };
 
   return (
@@ -282,12 +346,20 @@ const Sales: React.FC<SalesProps> = ({ setCurrentPage }) => {
                       {formatDate(sale.created_at)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => handleViewDetails(sale)}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        View Details
-                      </button>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleViewDetails(sale)}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          View Details
+                        </button>
+                        <button
+                          onClick={() => handleViewBill(sale)}
+                          className="text-green-600 hover:text-green-900"
+                        >
+                          View Bill
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -351,6 +423,131 @@ const Sales: React.FC<SalesProps> = ({ setCurrentPage }) => {
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bill Modal */}
+      {showBill && selectedSale && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-10 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Bill Details - Sale #{selectedSale.id}</h3>
+                <button
+                  onClick={handleCloseBill}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              {loadingItems ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-2">Loading bill details...</span>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Bill Header */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="font-semibold text-gray-900">Customer Information</h4>
+                        <p className="text-sm text-gray-600">
+                          {selectedSale.customer?.name || 'Walk-in Customer'}
+                        </p>
+                        {selectedSale.customer?.phone && (
+                          <p className="text-sm text-gray-600">{selectedSale.customer.phone}</p>
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">Sale Information</h4>
+                        <p className="text-sm text-gray-600">Date: {formatDate(selectedSale.created_at)}</p>
+                        <p className="text-sm text-gray-600">Payment: {selectedSale.payment_method}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bill Items */}
+                  <div className="bg-white border rounded-lg">
+                    <div className="px-4 py-3 border-b bg-gray-50">
+                      <h4 className="font-semibold text-gray-900">Items</h4>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Item
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Quantity
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Unit Price
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Total
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {saleItems.map((item, index) => (
+                            <tr key={index} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                Product {item.product_variant_id}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {item.quantity}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                ₹{item.unit_price.toFixed(2)}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                ₹{item.total.toFixed(2)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Bill Summary */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm text-gray-600">Subtotal: ₹{(selectedSale.total_amount - selectedSale.tax_amount).toFixed(2)}</p>
+                        {selectedSale.tax_amount > 0 && (
+                          <p className="text-sm text-gray-600">Tax: ₹{selectedSale.tax_amount.toFixed(2)}</p>
+                        )}
+                        {selectedSale.discount_amount > 0 && (
+                          <p className="text-sm text-gray-600">Discount: ₹{selectedSale.discount_amount.toFixed(2)}</p>
+                        )}
+                        <p className="text-lg font-semibold text-gray-900">Total: ₹{selectedSale.total_amount.toFixed(2)}</p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={handlePrintBill}
+                          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                        >
+                          🖨️ Print Bill
+                        </button>
+                        <button
+                          onClick={handleCloseBill}
+                          className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

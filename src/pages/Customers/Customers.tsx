@@ -16,6 +16,10 @@ const Customers: React.FC<CustomersProps> = ({ setCurrentPage }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState<number | null>(null);
 
+  // Pagination state
+  const [currentPageNum, setCurrentPageNum] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -149,6 +153,17 @@ const Customers: React.FC<CustomersProps> = ({ setCurrentPage }) => {
     (customer.email && customer.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
     customer.phone.includes(searchQuery)
   );
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+  const startIndex = (currentPageNum - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentCustomers = filteredCustomers.slice(startIndex, endIndex);
+
+  // Reset to first page when search query changes
+  useEffect(() => {
+    setCurrentPageNum(1);
+  }, [searchQuery]);
 
   if (loading) {
     return (
@@ -321,7 +336,7 @@ const Customers: React.FC<CustomersProps> = ({ setCurrentPage }) => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredCustomers.map((customer) => (
+              {currentCustomers.map((customer) => (
                 <tr key={customer.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
@@ -368,6 +383,82 @@ const Customers: React.FC<CustomersProps> = ({ setCurrentPage }) => {
         {filteredCustomers.length === 0 && (
           <div className="text-center py-8 text-gray-500">
             {searchQuery ? 'No customers found matching your search.' : 'No customers found. Add your first customer!'}
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <span className="text-sm text-gray-700">
+                  Showing {startIndex + 1} to {Math.min(endIndex, filteredCustomers.length)} of {filteredCustomers.length} customers
+                </span>
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm text-gray-700">Items per page:</label>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPageNum(1);
+                    }}
+                    className="text-sm border border-gray-300 rounded px-2 py-1"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setCurrentPageNum(Math.max(1, currentPageNum - 1))}
+                  disabled={currentPageNum === 1}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPageNum <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPageNum >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPageNum - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPageNum(pageNum)}
+                        className={`px-3 py-1 text-sm border rounded ${
+                          currentPageNum === pageNum
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                <button
+                  onClick={() => setCurrentPageNum(Math.min(totalPages, currentPageNum + 1))}
+                  disabled={currentPageNum === totalPages}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

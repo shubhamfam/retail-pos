@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-pub const CURRENT_VERSION: u32 = 4;
+pub const CURRENT_VERSION: u32 = 5;
 
 pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     let current_version = get_current_version(conn)?;
@@ -16,6 +16,9 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     }
     if current_version < 4 {
         run_migration_4(conn)?;
+    }
+    if current_version < 5 {
+        run_migration_5(conn)?;
     }
     
     Ok(())
@@ -353,5 +356,40 @@ fn run_migration_3(connection: &Connection) -> Result<()> {
     connection.execute("CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at)", [])?;
     connection.execute("CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id)", [])?;
 
+    Ok(())
+}
+
+fn run_migration_5(conn: &Connection) -> Result<(), rusqlite::Error> {
+    println!("Running migration 5: Adding settings table");
+    
+    // Create settings table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            value TEXT NOT NULL,
+            description TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+    
+    // Create settings index
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key)", [])?;
+    
+    // Insert default settings
+    conn.execute(
+        "INSERT OR IGNORE INTO settings (key, value, description) VALUES (?, ?, ?)",
+        ["lowStockThreshold", "10", "Low stock threshold for inventory alerts"],
+    )?;
+
+    // Update version
+    conn.execute(
+        "INSERT OR REPLACE INTO db_version (version) VALUES (?)",
+        [5],
+    )?;
+
+    println!("Migration 5 completed successfully");
     Ok(())
 } 

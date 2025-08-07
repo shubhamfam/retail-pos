@@ -37,8 +37,25 @@ const Dashboard: React.FC<DashboardProps> = ({ setCurrentPage }) => {
 
   useEffect(() => {
     console.log('Dashboard component mounted');
-    loadDashboardData();
+    loadSettingsAndData();
   }, []);
+
+  const loadSettingsAndData = async () => {
+    try {
+      // Load settings first
+      const savedThreshold = await DatabaseService.getSetting('lowStockThreshold');
+      if (savedThreshold) {
+        setLowStockThreshold(parseInt(savedThreshold));
+      }
+      
+      // Then load dashboard data
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Error loading settings:', error);
+      // Continue with default values
+      await loadDashboardData();
+    }
+  };
 
   
 
@@ -331,7 +348,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setCurrentPage }) => {
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-medium text-gray-900">
-                      ₹{performer.totalSales.toLocaleString()}
+                      ₹{performer.totalAmount.toLocaleString()}
                     </div>
                     <div className="text-xs text-gray-500">{performer.totalTransactions} sales</div>
                   </div>

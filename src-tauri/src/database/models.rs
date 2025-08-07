@@ -110,6 +110,16 @@ pub struct Supplier {
     pub address: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Setting {
+    pub id: Option<i32>,
+    pub key: String,
+    pub value: String,
+    pub description: Option<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
 // Helper functions to convert from database rows
 impl Product {
     pub fn from_row(row: &Row) -> rusqlite::Result<Self> {
@@ -203,6 +213,19 @@ impl User {
             name: row.get(4)?,
             created_at: row.get(5)?,
             last_login: row.get(6)?,
+        })
+    }
+}
+
+impl Setting {
+    pub fn from_row(row: &Row) -> rusqlite::Result<Self> {
+        Ok(Setting {
+            id: row.get(0)?,
+            key: row.get(1)?,
+            value: row.get(2)?,
+            description: row.get(3)?,
+            created_at: row.get(4)?,
+            updated_at: row.get(5)?,
         })
     }
 } 

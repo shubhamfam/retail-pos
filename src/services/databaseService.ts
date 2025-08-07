@@ -199,6 +199,18 @@ export class DatabaseService {
     }
   }
 
+  static async getSaleItems(saleId: number): Promise<SaleItem[]> {
+    try {
+      console.log('Fetching sale items for sale ID:', saleId);
+      const result = await invoke('get_sale_items', { saleId });
+      console.log('Sale items fetched successfully:', result);
+      return result as SaleItem[];
+    } catch (error) {
+      console.error('Error fetching sale items:', error);
+      return [];
+    }
+  }
+
   static async createSaleItem(saleItem: Omit<SaleItem, 'id'>): Promise<number> {
     console.log('DatabaseService: Creating sale item:', saleItem);
     try {
@@ -434,6 +446,215 @@ export class DatabaseService {
     } catch (error) {
       console.error('Error fetching top performers:', error);
       throw new Error(`Failed to fetch top performers: ${error}`);
+    }
+  }
+
+  // Settings management methods
+  static async getSetting(key: string): Promise<string | null> {
+    try {
+      console.log('Getting setting:', key);
+      const result = await invoke('get_setting', { key });
+      console.log('Setting retrieved successfully:', result);
+      return result as string | null;
+    } catch (error) {
+      console.error('Error getting setting:', error);
+      throw new Error(`Failed to get setting: ${error}`);
+    }
+  }
+
+  static async setSetting(key: string, value: string, description?: string): Promise<void> {
+    try {
+      console.log('Setting setting:', { key, value, description });
+      await invoke('set_setting', { key, value, description });
+      console.log('Setting saved successfully');
+    } catch (error) {
+      console.error('Error setting setting:', error);
+      throw new Error(`Failed to set setting: ${error}`);
+    }
+  }
+
+  static async getAllSettings(): Promise<Array<{key: string, value: string, description?: string}>> {
+    try {
+      console.log('Getting all settings...');
+      const result = await invoke('get_all_settings');
+      console.log('All settings retrieved successfully:', result);
+      return result as Array<{key: string, value: string, description?: string}>;
+    } catch (error) {
+      console.error('Error getting all settings:', error);
+      throw new Error(`Failed to get all settings: ${error}`);
+    }
+  }
+
+  // Import/Export methods
+  static async exportProductsToCSV(filePath: string): Promise<string> {
+    try {
+      console.log('Exporting products to CSV:', filePath);
+      const result = await invoke('export_products_to_csv', { filePath });
+      console.log('Products exported successfully');
+      return result as string;
+    } catch (error) {
+      console.error('Error exporting products:', error);
+      throw new Error(`Failed to export products: ${error}`);
+    }
+  }
+
+  static async exportCustomersToCSV(filePath: string): Promise<string> {
+    try {
+      console.log('Exporting customers to CSV:', filePath);
+      const result = await invoke('export_customers_to_csv', { filePath });
+      console.log('Customers exported successfully');
+      return result as string;
+    } catch (error) {
+      console.error('Error exporting customers:', error);
+      throw new Error(`Failed to export customers: ${error}`);
+    }
+  }
+
+  static async importProductsFromCSV(filePath: string): Promise<{
+    success_count: number;
+    error_count: number;
+    errors: string[];
+  }> {
+    try {
+      console.log('Importing products from CSV:', filePath);
+      const result = await invoke('import_products_from_csv', { filePath });
+      console.log('Products imported successfully:', result);
+      return result as {
+        success_count: number;
+        error_count: number;
+        errors: string[];
+      };
+    } catch (error) {
+      console.error('Error importing products:', error);
+      throw new Error(`Failed to import products: ${error}`);
+    }
+  }
+
+  static async importCustomersFromCSV(filePath: string): Promise<{
+    success_count: number;
+    error_count: number;
+    errors: string[];
+  }> {
+    try {
+      console.log('Importing customers from CSV:', filePath);
+      const result = await invoke('import_customers_from_csv', { filePath });
+      console.log('Customers imported successfully:', result);
+      return result as {
+        success_count: number;
+        error_count: number;
+        errors: string[];
+      };
+    } catch (error) {
+      console.error('Error importing customers:', error);
+      throw new Error(`Failed to import customers: ${error}`);
+    }
+  }
+
+  static async generateProductTemplate(filePath: string): Promise<string> {
+    try {
+      console.log('Generating product template:', filePath);
+      const result = await invoke('generate_product_template', { filePath });
+      console.log('Product template generated successfully');
+      return result as string;
+    } catch (error) {
+      console.error('Error generating product template:', error);
+      throw new Error(`Failed to generate product template: ${error}`);
+    }
+  }
+
+  static async generateCustomerTemplate(filePath: string): Promise<string> {
+    try {
+      console.log('Generating customer template:', filePath);
+      const result = await invoke('generate_customer_template', { filePath });
+      console.log('Customer template generated successfully');
+      return result as string;
+    } catch (error) {
+      console.error('Error generating customer template:', error);
+      throw new Error(`Failed to generate customer template: ${error}`);
+    }
+  }
+
+  static async saveTemplateWithDialog(templateType: 'products' | 'customers' | 'salespersons'): Promise<string> {
+    try {
+      console.log('Saving template with dialog for type:', templateType);
+      const result = await invoke('save_template_with_dialog', { templateType });
+      console.log('Template saved successfully with dialog');
+      return result as string;
+    } catch (error) {
+      console.error('Error saving template with dialog:', error);
+      throw new Error(`Failed to save template with dialog: ${error}`);
+    }
+  }
+
+  static async importProductsFromCSVContent(content: string): Promise<{
+    success_count: number;
+    error_count: number;
+    errors: string[];
+  }> {
+    try {
+      console.log('Importing products from CSV content');
+      const result = await invoke('import_products_from_csv_content', { content });
+      console.log('Products imported successfully from content:', result);
+      return result as {
+        success_count: number;
+        error_count: number;
+        errors: string[];
+      };
+    } catch (error) {
+      console.error('Error importing products from content:', error);
+      throw new Error(`Failed to import products from content: ${error}`);
+    }
+  }
+
+  static async importCustomersFromCSVContent(content: string): Promise<{
+    success_count: number;
+    error_count: number;
+    errors: string[];
+  }> {
+    try {
+      console.log('Importing customers from CSV content');
+      const result = await invoke('import_customers_from_csv_content', { content });
+      console.log('Customers imported successfully from content:', result);
+      return result as {
+        success_count: number;
+        error_count: number;
+        errors: string[];
+      };
+    } catch (error) {
+      console.error('Error importing customers from content:', error);
+      throw new Error(`Failed to import customers from content: ${error}`);
+    }
+  }
+
+  static async importSalespersonsFromCSVContent(content: string): Promise<{
+    success_count: number;
+    error_count: number;
+    errors: string[];
+  }> {
+    try {
+      console.log('Importing salespersons from CSV content');
+      const result = await invoke('import_salespersons_from_csv_content', { content });
+      console.log('Salespersons imported successfully from content:', result);
+      return result as {
+        success_count: number;
+        error_count: number;
+        errors: string[];
+      };
+    } catch (error) {
+      console.error('Error importing salespersons from content:', error);
+      throw new Error(`Failed to import salespersons from content: ${error}`);
+    }
+  }
+
+  static async generateSalespersonTemplate(filePath: string): Promise<string> {
+    try {
+      console.log('Generating salesperson template');
+      const result = await invoke('generate_salesperson_template', { filePath });
+      console.log('Salesperson template generated successfully:', result);
+      return result as string;
+    } catch (error) {
+      console.error('Error generating salesperson template:', error);
+      throw error;
     }
   }
 } 

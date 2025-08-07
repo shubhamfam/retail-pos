@@ -30,6 +30,10 @@ const Products: React.FC<ProductsProps> = ({ setCurrentPage }) => {
     sku: string;
   }>>([]);
 
+  // Pagination state
+  const [currentPageNum, setCurrentPageNum] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
   // New variant form state
   const [newVariant, setNewVariant] = useState({
     size: '',
@@ -312,6 +316,17 @@ const Products: React.FC<ProductsProps> = ({ setCurrentPage }) => {
     product.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+  const startIndex = (currentPageNum - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentProducts = filteredProducts.slice(startIndex, endIndex);
+
+  // Reset to first page when search query changes
+  useEffect(() => {
+    setCurrentPageNum(1);
+  }, [searchQuery]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -339,16 +354,27 @@ const Products: React.FC<ProductsProps> = ({ setCurrentPage }) => {
               </svg>
             )}
           </button>
-          <button
-            onClick={() => {
-              resetForm();
-              setShowAddForm(true);
-              setEditingProduct(null);
-            }}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg"
-          >
-            + Add Product
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => {
+                resetForm();
+                setShowAddForm(true);
+                setEditingProduct(null);
+              }}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg"
+            >
+              + Add Product
+            </button>
+            <button
+              onClick={loadProducts}
+              className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center space-x-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>Refresh</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -718,7 +744,7 @@ const Products: React.FC<ProductsProps> = ({ setCurrentPage }) => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredProducts.map((product) => (
+                {currentProducts.map((product) => (
                   <tr key={product.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
@@ -835,6 +861,82 @@ const Products: React.FC<ProductsProps> = ({ setCurrentPage }) => {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <span className="text-sm text-gray-700">
+                  Showing {startIndex + 1} to {Math.min(endIndex, filteredProducts.length)} of {filteredProducts.length} products
+                </span>
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm text-gray-700">Items per page:</label>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPageNum(1);
+                    }}
+                    className="text-sm border border-gray-300 rounded px-2 py-1"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setCurrentPageNum(Math.max(1, currentPageNum - 1))}
+                  disabled={currentPageNum === 1}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPageNum <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPageNum >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPageNum - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPageNum(pageNum)}
+                        className={`px-3 py-1 text-sm border rounded ${
+                          currentPageNum === pageNum
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                <button
+                  onClick={() => setCurrentPageNum(Math.min(totalPages, currentPageNum + 1))}
+                  disabled={currentPageNum === totalPages}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

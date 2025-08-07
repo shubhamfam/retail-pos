@@ -4,12 +4,10 @@
 mod database;
 
 use tauri::{AppHandle, Manager};
-use database::{Database, connection::{ProductService, CustomerService, SaleService, UserService, SalespersonService}};
+use database::{Database, connection::{ProductService, CustomerService, SaleService, UserService, SalespersonService, SettingsService}, import_export::ImportExportService};
 use database::models::*;
 use serde::Deserialize;
-use std::sync::{Arc, Mutex};
 use std::fs;
-use std::path::PathBuf;
 use chrono::{DateTime, Utc};
 
 #[derive(Deserialize)]
@@ -62,6 +60,21 @@ fn main() {
             get_salesperson_performance,
             get_top_performers,
             save_receipt,
+            get_setting,
+            set_setting,
+            get_all_settings,
+            export_products_to_csv,
+            export_customers_to_csv,
+            import_products_from_csv,
+            import_customers_from_csv,
+            import_products_from_csv_content,
+            import_customers_from_csv_content,
+            import_salespersons_from_csv_content,
+            generate_product_template,
+            generate_customer_template,
+            generate_salesperson_template,
+            get_sale_items,
+            save_template_with_dialog,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -482,7 +495,7 @@ async fn update_salesperson(
 }
 
 #[tauri::command]
-async fn save_receipt(app_handle: AppHandle, receipt_content: String, sale_id: i32) -> Result<String, String> {
+async fn save_receipt(_app_handle: AppHandle, receipt_content: String, sale_id: i32) -> Result<String, String> {
     // Get the user's Documents directory path
     let home_dir = dirs::home_dir().ok_or("Could not find home directory")?;
     let mut docs_path = home_dir;
@@ -515,6 +528,203 @@ async fn save_receipt(app_handle: AppHandle, receipt_content: String, sale_id: i
     
     Ok(file_path.to_string_lossy().to_string())
 }
+
+#[tauri::command]
+async fn get_setting(app_handle: AppHandle, key: String) -> Result<Option<String>, String> {
+    let db = app_handle.state::<Database>();
+    let settings_service = SettingsService::new(db.connection.clone());
+    
+    settings_service.get_setting(&key)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn set_setting(app_handle: AppHandle, key: String, value: String, description: Option<String>) -> Result<(), String> {
+    let db = app_handle.state::<Database>();
+    let settings_service = SettingsService::new(db.connection.clone());
+    
+    settings_service.set_setting(&key, &value, description.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_all_settings(app_handle: AppHandle) -> Result<Vec<Setting>, String> {
+    let db = app_handle.state::<Database>();
+    let settings_service = SettingsService::new(db.connection.clone());
+    
+    settings_service.get_all_settings()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn export_products_to_csv(app_handle: AppHandle, file_path: String) -> Result<String, String> {
+    let db = app_handle.state::<Database>();
+    let import_export_service = ImportExportService::new(db.connection.clone());
+    
+    import_export_service.export_products_to_csv(&file_path)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(format!("Products exported successfully to {}", file_path))
+}
+
+#[tauri::command]
+async fn export_customers_to_csv(app_handle: AppHandle, file_path: String) -> Result<String, String> {
+    let db = app_handle.state::<Database>();
+    let import_export_service = ImportExportService::new(db.connection.clone());
+    
+    import_export_service.export_customers_to_csv(&file_path)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(format!("Customers exported successfully to {}", file_path))
+}
+
+#[tauri::command]
+async fn import_products_from_csv(app_handle: AppHandle, file_path: String) -> Result<serde_json::Value, String> {
+    let db = app_handle.state::<Database>();
+    let mut import_export_service = ImportExportService::new(db.connection.clone());
+    
+    let result = import_export_service.import_products_from_csv(&file_path)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::json!({
+        "success_count": result.success_count,
+        "error_count": result.error_count,
+        "errors": result.errors
+    }))
+}
+
+#[tauri::command]
+async fn import_customers_from_csv(app_handle: AppHandle, file_path: String) -> Result<serde_json::Value, String> {
+    let db = app_handle.state::<Database>();
+    let mut import_export_service = ImportExportService::new(db.connection.clone());
+    
+    let result = import_export_service.import_customers_from_csv(&file_path)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::json!({
+        "success_count": result.success_count,
+        "error_count": result.error_count,
+        "errors": result.errors
+    }))
+}
+
+#[tauri::command]
+async fn import_products_from_csv_content(app_handle: AppHandle, content: String) -> Result<serde_json::Value, String> {
+    let db = app_handle.state::<Database>();
+    let mut import_export_service = ImportExportService::new(db.connection.clone());
+    
+    let result = import_export_service.import_products_from_csv_content(&content)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::json!({
+        "success_count": result.success_count,
+        "error_count": result.error_count,
+        "errors": result.errors
+    }))
+}
+
+#[tauri::command]
+async fn import_customers_from_csv_content(app_handle: AppHandle, content: String) -> Result<serde_json::Value, String> {
+    let db = app_handle.state::<Database>();
+    let mut import_export_service = ImportExportService::new(db.connection.clone());
+    
+    let result = import_export_service.import_customers_from_csv_content(&content)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::json!({
+        "success_count": result.success_count,
+        "error_count": result.error_count,
+        "errors": result.errors
+    }))
+}
+
+#[tauri::command]
+async fn generate_product_template(app_handle: AppHandle, file_path: String) -> Result<String, String> {
+    let db = app_handle.state::<Database>();
+    let import_export_service = ImportExportService::new(db.connection.clone());
+    
+    import_export_service.generate_product_template(&file_path)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(format!("Product template generated successfully at {}", file_path))
+}
+
+#[tauri::command]
+async fn generate_customer_template(app_handle: AppHandle, file_path: String) -> Result<String, String> {
+    let db = app_handle.state::<Database>();
+    let import_export_service = ImportExportService::new(db.connection.clone());
+    
+    import_export_service.generate_customer_template(&file_path)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(format!("Customer template generated successfully at {}", file_path))
+}
+
+#[tauri::command]
+async fn save_template_with_dialog(app_handle: AppHandle, template_type: String) -> Result<String, String> {
+    let db = app_handle.state::<Database>();
+    let import_export_service = ImportExportService::new(db.connection.clone());
+    
+    // Get the Documents directory for saving templates
+    let documents_dir = dirs::document_dir()
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
+    
+    // Create the file path in Documents
+    let file_path = documents_dir.join(format!("{}_template.csv", template_type));
+    
+    // Generate the template
+    if template_type == "products" {
+        import_export_service.generate_product_template(file_path.to_str().unwrap())
+            .map_err(|e| e.to_string())?;
+    } else if template_type == "customers" {
+        import_export_service.generate_customer_template(file_path.to_str().unwrap())
+            .map_err(|e| e.to_string())?;
+    } else if template_type == "salespersons" {
+        import_export_service.generate_salesperson_template(file_path.to_str().unwrap())
+            .map_err(|e| e.to_string())?;
+    } else {
+        return Err("Invalid template type".to_string());
+    }
+    
+    Ok(format!("✅ Template downloaded successfully!\n\n📁 Location: {}\n\n📋 You can now open this file in Excel or any spreadsheet application to fill in your data.", file_path.display()))
+}
+
+#[tauri::command]
+async fn import_salespersons_from_csv_content(app_handle: AppHandle, content: String) -> Result<serde_json::Value, String> {
+    let db = app_handle.state::<Database>();
+    let mut import_export_service = ImportExportService::new(db.connection.clone());
+    
+    let result = import_export_service.import_salespersons_from_csv_content(&content)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::json!({
+        "success_count": result.success_count,
+        "error_count": result.error_count,
+        "errors": result.errors
+    }))
+}
+
+#[tauri::command]
+async fn generate_salesperson_template(app_handle: AppHandle, file_path: String) -> Result<String, String> {
+    let db = app_handle.state::<Database>();
+    let import_export_service = ImportExportService::new(db.connection.clone());
+    
+    import_export_service.generate_salesperson_template(&file_path)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(format!("Salesperson template generated successfully at {}", file_path))
+}
+
+#[tauri::command]
+async fn get_sale_items(app_handle: AppHandle, sale_id: i32) -> Result<Vec<SaleItem>, String> {
+    let db = app_handle.state::<Database>();
+    let sale_service = SaleService::new(db.connection.clone());
+    
+    sale_service.get_sale_items(sale_id)
+        .map_err(|e| e.to_string())
+}
+
+
 
 
 

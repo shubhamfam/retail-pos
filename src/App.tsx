@@ -10,6 +10,7 @@ import Reports from './pages/Reports/Reports';
 import Settings from './pages/Settings/Settings';
 import Sales from './pages/Sales/Sales';
 import Salesperson from './pages/Salesperson/Salesperson';
+import ImportExport from './pages/ImportExport/ImportExport';
 import Login from './pages/Auth/Login';
 import { User } from './types';
 import { useKeyboardShortcuts, createNavigationShortcuts } from './hooks/useKeyboardShortcuts';
@@ -73,6 +74,8 @@ const App: React.FC = () => {
         return <Salesperson setCurrentPage={setCurrentPage} />;
       case 'settings':
         return <Settings setCurrentPage={setCurrentPage} />;
+      case 'importexport':
+        return <ImportExport setCurrentPage={setCurrentPage} />;
       default:
         return <Dashboard setCurrentPage={setCurrentPage} />;
     }
@@ -189,6 +192,14 @@ const App: React.FC = () => {
               }`}
             >
               ⚙️ Settings
+            </button>
+            <button
+              onClick={() => setCurrentPage('importexport')}
+              className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
+                currentPage === 'importexport' ? 'bg-blue-600' : 'hover:bg-gray-700'
+              }`}
+            >
+              📥 Import/Export
             </button>
           </nav>
         </div>

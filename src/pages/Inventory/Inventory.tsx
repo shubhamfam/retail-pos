@@ -17,7 +17,30 @@ const Inventory: React.FC<InventoryProps> = ({ setCurrentPage }) => {
   const [adjustmentAmount, setAdjustmentAmount] = useState(0);
 
   useEffect(() => {
-    loadInventoryData();
+    loadSettingsAndData();
+  }, []);
+
+  const loadSettingsAndData = async () => {
+    try {
+      // Load settings first
+      const savedThreshold = await DatabaseService.getSetting('lowStockThreshold');
+      if (savedThreshold) {
+        setLowStockThreshold(parseInt(savedThreshold));
+      }
+      
+      // Then load inventory data
+      await loadInventoryData();
+    } catch (error) {
+      console.error('Error loading settings:', error);
+      // Continue with default values
+      await loadInventoryData();
+    }
+  };
+
+  useEffect(() => {
+    if (lowStockThreshold > 0) {
+      loadInventoryData();
+    }
   }, [lowStockThreshold]);
 
   const loadInventoryData = async () => {
@@ -153,18 +176,7 @@ const Inventory: React.FC<InventoryProps> = ({ setCurrentPage }) => {
         </div>
       </div>
 
-      {/* Low Stock Threshold */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Low Stock Threshold
-        </label>
-        <input
-          type="number"
-          value={lowStockThreshold}
-          onChange={(e) => setLowStockThreshold(Number(e.target.value))}
-          className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
+
 
       {/* Low Stock Items */}
       <div className="mb-8">

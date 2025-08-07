@@ -1,0 +1,3 @@
+name,brand,category,subcategory,description,base_price,cost_price,barcode,size,color,sku,stock_quantity,price_adjustment
+Product Name,Brand,Category,Subcategory,Description (optional),0.0,0.0,Barcode (optional),Size,Color,SKU,0,0.0
+Example T-Shirt,Example Brand,Clothing,T-Shirts,Cotton t-shirt,500.0,300.0,1234567890123,M,Blue,TSHIRT-M-BLUE,50,0.0

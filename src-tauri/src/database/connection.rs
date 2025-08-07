@@ -14,11 +14,24 @@ impl ProductService {
     pub fn get_all_products(&self) -> Result<Vec<Product>> {
         let connection = self.connection.lock().unwrap();
         let mut stmt = connection.prepare(
-            "SELECT id, name, brand, category, subcategory, description, base_price, cost_price, barcode, created_at, updated_at FROM products ORDER BY name"
+            "SELECT p.id, p.name, p.brand, p.category, p.subcategory, p.description, 
+                    p.base_price, p.cost_price, p.barcode, p.created_at, p.updated_at,
+                    COUNT(pv.id) as variant_count,
+                    COALESCE(SUM(pv.stock_quantity), 0) as total_stock
+             FROM products p
+             LEFT JOIN product_variants pv ON p.id = pv.product_id
+             GROUP BY p.id, p.name, p.brand, p.category, p.subcategory, p.description, 
+                      p.base_price, p.cost_price, p.barcode, p.created_at, p.updated_at
+             ORDER BY p.name"
         )?;
         
-        let products = stmt.query_map([], |row| Product::from_row(row))?
-            .collect::<Result<Vec<_>>>()?;
+        let products = stmt.query_map([], |row| {
+            let mut product = Product::from_row(row)?;
+            // Add variant count and total stock to the product object
+            // Note: We'll need to modify the Product struct to include these fields
+            Ok(product)
+        })?
+        .collect::<Result<Vec<_>>>()?;
         
         Ok(products)
     }
@@ -480,6 +493,18 @@ impl SaleService {
         
         Ok(sales)
     }
+
+    pub fn get_sale_items(&self, sale_id: i32) -> Result<Vec<SaleItem>> {
+        let connection = self.connection.lock().unwrap();
+        let mut stmt = connection.prepare(
+            "SELECT id, sale_id, product_variant_id, quantity, unit_price, discount, total FROM sale_items WHERE sale_id = ?"
+        )?;
+        
+        let sale_items = stmt.query_map([sale_id], |row| SaleItem::from_row(row))?
+            .collect::<Result<Vec<_>>>()?;
+        
+        Ok(sale_items)
+    }
 } 
 
 pub struct UserService {
@@ -692,5 +717,52 @@ impl SalespersonService {
         })?;
 
         result_iter.collect()
+    }
+}
+
+pub struct SettingsService {
+    connection: Arc<Mutex<Connection>>,
+}
+
+impl SettingsService {
+    pub fn new(connection: Arc<Mutex<Connection>>) -> Self {
+        Self { connection }
+    }
+
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
+        let connection = self.connection.lock().unwrap();
+        let mut stmt = connection.prepare("SELECT value FROM settings WHERE key = ?")?;
+        
+        let mut rows = stmt.query_map([key], |row| row.get::<_, String>(0))?;
+        
+        if let Some(row) = rows.next() {
+            Ok(Some(row?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn set_setting(&self, key: &str, value: &str, description: Option<&str>) -> Result<()> {
+        let connection = self.connection.lock().unwrap();
+        
+        // Use INSERT OR REPLACE to handle both insert and update
+        let mut stmt = connection.prepare(
+            "INSERT OR REPLACE INTO settings (key, value, description, updated_at) VALUES (?, ?, ?, datetime('now'))"
+        )?;
+        
+        stmt.execute(params![key, value, description])?;
+        Ok(())
+    }
+
+    pub fn get_all_settings(&self) -> Result<Vec<Setting>> {
+        let connection = self.connection.lock().unwrap();
+        let mut stmt = connection.prepare(
+            "SELECT id, key, value, description, created_at, updated_at FROM settings ORDER BY key"
+        )?;
+        
+        let settings = stmt.query_map([], |row| Setting::from_row(row))?
+            .collect::<Result<Vec<_>>>()?;
+        
+        Ok(settings)
     }
 } 
