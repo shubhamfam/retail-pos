@@ -15,7 +15,7 @@ interface SaleState {
 const sampleSales: Sale[] = [
   {
     id: 1,
-    customerId: 1,
+    customer_id: 1,
     userId: 1,
     totalAmount: 1797,
     taxAmount: 323.46,
@@ -26,7 +26,7 @@ const sampleSales: Sale[] = [
   },
   {
     id: 2,
-    customerId: 2,
+    customer_id: 2,
     userId: 1,
     totalAmount: 899,
     taxAmount: 161.82,
@@ -37,7 +37,7 @@ const sampleSales: Sale[] = [
   },
   {
     id: 3,
-    customerId: 3,
+    customer_id: 3,
     userId: 1,
     totalAmount: 399,
     taxAmount: 71.82,
@@ -51,7 +51,7 @@ const sampleSales: Sale[] = [
 const sampleSaleItems: SaleItem[] = [
   {
     id: 1,
-    saleId: 1,
+    sale_id: 1,
     productVariantId: 1,
     quantity: 2,
     unitPrice: 599,
@@ -60,7 +60,7 @@ const sampleSaleItems: SaleItem[] = [
   },
   {
     id: 2,
-    saleId: 1,
+    sale_id: 1,
     productVariantId: 3,
     quantity: 1,
     unitPrice: 1299,
@@ -69,7 +69,7 @@ const sampleSaleItems: SaleItem[] = [
   },
   {
     id: 3,
-    saleId: 2,
+    sale_id: 2,
     productVariantId: 5,
     quantity: 1,
     unitPrice: 899,
@@ -78,7 +78,7 @@ const sampleSaleItems: SaleItem[] = [
   },
   {
     id: 4,
-    saleId: 3,
+    sale_id: 3,
     productVariantId: 7,
     quantity: 1,
     unitPrice: 399,

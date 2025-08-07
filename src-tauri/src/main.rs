@@ -4,7 +4,7 @@
 mod database;
 
 use tauri::{AppHandle, Manager};
-use database::{Database, connection::{ProductService, CustomerService, SaleService, UserService, SalespersonService, SettingsService}, import_export::ImportExportService};
+use database::{Database, connection::{ProductService, CustomerService, SaleService, UserService, SalespersonService, SettingsService, LicenseService}, import_export::ImportExportService};
 use database::models::*;
 use serde::Deserialize;
 use std::fs;
@@ -75,6 +75,14 @@ fn main() {
             generate_salesperson_template,
             get_sale_items,
             save_template_with_dialog,
+            validate_license,
+            activate_license,
+            get_active_license,
+            is_license_expired,
+            create_predefined_licenses,
+            reset_license_system,
+            debug_license_status,
+            check_date_format,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -539,6 +547,15 @@ async fn get_setting(app_handle: AppHandle, key: String) -> Result<Option<String
 }
 
 #[tauri::command]
+async fn validate_license(app_handle: AppHandle, license_key: String) -> Result<Option<License>, String> {
+    let db = app_handle.state::<Database>();
+    let license_service = LicenseService::new(db.connection.clone());
+    
+    license_service.validate_license(&license_key)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn set_setting(app_handle: AppHandle, key: String, value: String, description: Option<String>) -> Result<(), String> {
     let db = app_handle.state::<Database>();
     let settings_service = SettingsService::new(db.connection.clone());
@@ -548,11 +565,29 @@ async fn set_setting(app_handle: AppHandle, key: String, value: String, descript
 }
 
 #[tauri::command]
+async fn activate_license(app_handle: AppHandle, license_key: String) -> Result<(), String> {
+    let db = app_handle.state::<Database>();
+    let license_service = LicenseService::new(db.connection.clone());
+    
+    license_service.activate_license(&license_key)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn get_all_settings(app_handle: AppHandle) -> Result<Vec<Setting>, String> {
     let db = app_handle.state::<Database>();
     let settings_service = SettingsService::new(db.connection.clone());
     
     settings_service.get_all_settings()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_active_license(app_handle: AppHandle) -> Result<Option<License>, String> {
+    let db = app_handle.state::<Database>();
+    let license_service = LicenseService::new(db.connection.clone());
+    
+    license_service.get_active_license()
         .map_err(|e| e.to_string())
 }
 
@@ -724,6 +759,99 @@ async fn get_sale_items(app_handle: AppHandle, sale_id: i32) -> Result<Vec<SaleI
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn is_license_expired(app_handle: AppHandle) -> Result<bool, String> {
+    let db = app_handle.state::<Database>();
+    let license_service = LicenseService::new(db.connection.clone());
+    
+    license_service.is_license_expired()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn create_predefined_licenses(app_handle: AppHandle) -> Result<(), String> {
+    let db = app_handle.state::<Database>();
+    let license_service = LicenseService::new(db.connection.clone());
+    
+    license_service.create_predefined_licenses()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn reset_license_system(app_handle: AppHandle) -> Result<(), String> {
+    let db = app_handle.state::<Database>();
+    let connection = db.connection.lock().unwrap();
+    
+    // Drop licenses table and recreate it
+    connection.execute("DROP TABLE IF EXISTS licenses", [])
+        .map_err(|e| e.to_string())?;
+    
+    // Run migration 5 to recreate the licenses table
+    crate::database::migrations::run_migration_5(&connection)
+        .map_err(|e| e.to_string())?;
+    
+    // Create predefined licenses
+    let license_service = LicenseService::new(db.connection.clone());
+    license_service.create_predefined_licenses()
+        .map_err(|e| e.to_string())?;
+    
+    println!("License system reset successfully");
+    Ok(())
+}
+
+#[tauri::command]
+async fn debug_license_status(app_handle: AppHandle) -> Result<String, String> {
+    let db = app_handle.state::<Database>();
+    let license_service = LicenseService::new(db.connection.clone());
+    
+    // Get active license
+    match license_service.get_active_license() {
+        Ok(Some(license)) => {
+            let expired = license_service.is_license_expired()
+                .map_err(|e| e.to_string())?;
+            
+            Ok(format!(
+                "Active License: {}\nType: {}\nActivated: {}\nExpires: {}\nExpired: {}",
+                license.license_key,
+                license.license_type,
+                license.activated_at.unwrap_or_else(|| "NULL".to_string()),
+                license.expires_at.unwrap_or_else(|| "NULL".to_string()),
+                expired
+            ))
+        },
+        Ok(None) => Ok("No active license found".to_string()),
+        Err(e) => Err(format!("Error getting license: {}", e))
+    }
+}
+
+#[tauri::command]
+async fn check_date_format(app_handle: AppHandle) -> Result<String, String> {
+    let db = app_handle.state::<Database>();
+    let connection = db.connection.lock().unwrap();
+    
+    // Get all licenses with their date formats
+    let mut stmt = connection.prepare(
+        "SELECT id, license_key, activated_at, expires_at FROM licenses ORDER BY id"
+    ).map_err(|e| e.to_string())?;
+    
+    let rows = stmt.query_map([], |row| {
+        Ok(format!(
+            "ID: {}, Key: {}, Activated: '{}', Expires: '{}'",
+            row.get::<_, i32>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, Option<String>>(2)?.unwrap_or_else(|| "NULL".to_string()),
+            row.get::<_, Option<String>>(3)?.unwrap_or_else(|| "NULL".to_string())
+        ))
+    }).map_err(|e| e.to_string())?;
+    
+    let mut result = String::new();
+    for row in rows {
+        result.push_str(&row.map_err(|e| e.to_string())?);
+        result.push('\n');
+    }
+    
+    Ok(result)
+}
 
 
 

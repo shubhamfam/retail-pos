@@ -81,7 +81,10 @@ const Customers: React.FC<CustomersProps> = ({ setCurrentPage }) => {
         ));
         alert('Customer updated successfully!');
       } else {
-        const newCustomer = await DatabaseService.createCustomer(formData);
+        const newCustomer = await DatabaseService.createCustomer({
+          ...formData,
+          loyalty_points: formData.loyaltyPoints
+        });
         setCustomers([...customers, newCustomer]);
         alert('Customer added successfully!');
       }
@@ -102,7 +105,7 @@ const Customers: React.FC<CustomersProps> = ({ setCurrentPage }) => {
       email: customer.email || '',
       phone: customer.phone,
       address: customer.address || '',
-      loyaltyPoints: customer.loyaltyPoints || 0
+      loyaltyPoints: customer.loyalty_points || 0
     });
     setShowAddForm(true);
   };
@@ -357,7 +360,7 @@ const Customers: React.FC<CustomersProps> = ({ setCurrentPage }) => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      {customer.loyaltyPoints || 0} points
+                      {customer.loyalty_points || 0} points
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

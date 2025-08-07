@@ -483,7 +483,7 @@ impl ImportExportService {
         let connection = self.connection.lock().unwrap();
         
         // First create a default user for the salesperson
-        let user_id = connection.execute(
+        let _user_id = connection.execute(
             "INSERT INTO users (username, password_hash, role, name) 
              VALUES (?, ?, ?, ?)",
             rusqlite::params![

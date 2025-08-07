@@ -127,6 +127,17 @@ pub fn get_schema() -> String {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- License table
+    CREATE TABLE IF NOT EXISTS licenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        license_key TEXT UNIQUE NOT NULL,
+        license_type TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT 1,
+        activated_at DATETIME,
+        expires_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     -- Create indexes for better performance
     CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
     CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
@@ -138,6 +149,8 @@ pub fn get_schema() -> String {
     CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
     CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
     CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key);
+    CREATE INDEX IF NOT EXISTS idx_licenses_key ON licenses(license_key);
+    CREATE INDEX IF NOT EXISTS idx_licenses_active ON licenses(is_active);
     "#
     .to_string()
 } 

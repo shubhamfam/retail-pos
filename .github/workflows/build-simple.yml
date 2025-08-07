@@ -1,0 +1,158 @@
+name: Build Tauri App (Simple)
+
+on:
+  push:
+    branches: [ v1-licensing ]
+  pull_request:
+    branches: [ v1-licensing ]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build macOS app
+        run: cargo tauri build
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clothes-shop-pos-macos
+          path: |
+            src-tauri/target/release/bundle/macos/
+            src-tauri/target/release/bundle/dmg/
+          retention-days: 30
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows app
+        run: cargo tauri build
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clothes-shop-pos-windows
+          path: |
+            src-tauri/target/release/bundle/msi/
+            src-tauri/target/release/bundle/nsis/
+          retention-days: 30
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Linux app
+        run: cargo tauri build
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clothes-shop-pos-linux
+          path: |
+            src-tauri/target/release/bundle/appimage/
+            src-tauri/target/release/bundle/deb/
+          retention-days: 30
+
+  create-release:
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            clothes-shop-pos-macos/**/*
+            clothes-shop-pos-windows/**/*
+            clothes-shop-pos-linux/**/*
+          tag_name: v${{ github.run_number }}
+          name: Release v${{ github.run_number }}
+          body: |
+            🚀 Automated build for clothes-shop-pos
+            
+            **Platforms:**
+            - 🍎 macOS (Intel & Apple Silicon)
+            - 🪟 Windows
+            - 🐧 Linux
+            
+            **Features:**
+            - ✅ Complete POS system
+            - 🔑 15-day trial license system
+            - 💾 SQLite database
+            - 🎨 Modern React UI
+            
+            **License Keys for Trial:**
+            Contact support for trial license keys.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

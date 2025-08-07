@@ -76,6 +76,37 @@ fn run_migration_4(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+pub fn run_migration_5(conn: &Connection) -> Result<(), rusqlite::Error> {
+    println!("Running migration 5: Adding licenses table");
+    
+    // Create licenses table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS licenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            license_key TEXT UNIQUE NOT NULL,
+            license_type TEXT NOT NULL,
+            is_active BOOLEAN DEFAULT 1,
+            activated_at DATETIME,
+            expires_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+    
+    // Create license indexes
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_licenses_key ON licenses(license_key)", [])?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_licenses_active ON licenses(is_active)", [])?;
+
+    // Update version
+    conn.execute(
+        "INSERT OR REPLACE INTO db_version (version) VALUES (?)",
+        [5],
+    )?;
+
+    println!("Migration 5 completed successfully");
+    Ok(())
+}
+
 fn run_migration_1(connection: &Connection) -> Result<()> {
     println!("Running migration 1: Initial schema");
     
@@ -359,37 +390,4 @@ fn run_migration_3(connection: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn run_migration_5(conn: &Connection) -> Result<(), rusqlite::Error> {
-    println!("Running migration 5: Adding settings table");
-    
-    // Create settings table
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT UNIQUE NOT NULL,
-            value TEXT NOT NULL,
-            description TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )",
-        [],
-    )?;
-    
-    // Create settings index
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key)", [])?;
-    
-    // Insert default settings
-    conn.execute(
-        "INSERT OR IGNORE INTO settings (key, value, description) VALUES (?, ?, ?)",
-        ["lowStockThreshold", "10", "Low stock threshold for inventory alerts"],
-    )?;
-
-    // Update version
-    conn.execute(
-        "INSERT OR REPLACE INTO db_version (version) VALUES (?)",
-        [5],
-    )?;
-
-    println!("Migration 5 completed successfully");
-    Ok(())
-} 
+ 

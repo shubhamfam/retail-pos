@@ -136,7 +136,11 @@ const Products: React.FC<ProductsProps> = ({ setCurrentPage }) => {
         loadProducts();
       } else {
         // Create new product
-        const newProductId = await DatabaseService.createProduct(productData);
+        const newProductId = await DatabaseService.createProduct({
+          ...productData,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
         
         // Create variants if any were added
         if (variants.length > 0) {
