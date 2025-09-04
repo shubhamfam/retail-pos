@@ -376,10 +376,14 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
         }))
       });
       
+      // Ensure salesperson_id is properly handled
+      const salespersonId = selectedSalesperson && selectedSalesperson > 0 ? selectedSalesperson : null;
+      console.log('Creating sale with salesperson_id:', salespersonId, 'selectedSalesperson:', selectedSalesperson);
+      
       const sale = await DatabaseService.createSale(
         selectedCustomer?.id || null,
         userId,
-        selectedSalesperson || null,
+        salespersonId,
         total,
         taxAmount,
         discountAmount,
@@ -420,10 +424,10 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
       // Print receipt
       console.log('Printing receipt...');
       const storeInfo = {
-        name: 'Clothes Shop POS',
+        name: 'posly',
         address: '123 Main Street, City, State 12345',
         phone: '+91 98765 43210',
-        email: 'info@clothesshop.com',
+        email: 'info@posly.com',
         gstNumber: 'GST123456789'
       };
 

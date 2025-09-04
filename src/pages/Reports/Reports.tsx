@@ -37,24 +37,51 @@ const Reports: React.FC<ReportsProps> = ({ setCurrentPage }) => {
   const [adjustmentAmount, setAdjustmentAmount] = useState(0);
 
   useEffect(() => {
-    loadReportsData();
+    // Debounce rapid period changes to prevent multiple loads
+    const timeoutId = setTimeout(() => {
+      loadReportsData();
+    }, 200);
+    
+    return () => clearTimeout(timeoutId);
   }, [selectedPeriod]);
 
   const loadReportsData = async () => {
     try {
       setLoading(true);
       
-      // Load all data in parallel
-      const [recentSalesData, todaySales, productsData, customersData, lowStockItemsData, outOfStockItemsData] = await Promise.all([
-        DatabaseService.getRecentSales(50),
-        DatabaseService.getTodaySales(),
-        DatabaseService.getProducts(),
-        DatabaseService.getCustomers(),
-        DatabaseService.getLowStockItems(10),
-        DatabaseService.getOutOfStockItems()
+      // Add timeout wrapper for database calls to prevent blocking
+      const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number = 3000): Promise<T> => {
+        return Promise.race([
+          promise,
+          new Promise<T>((_, reject) => 
+            setTimeout(() => reject(new Error('Operation timed out')), timeoutMs)
+          )
+        ]);
+      };
+      
+      // Load critical data first with reduced limits and timeouts
+      const [recentSalesData, todaySales] = await Promise.all([
+        withTimeout(DatabaseService.getRecentSales(20), 2000),
+        withTimeout(DatabaseService.getTodaySales(), 2000)
       ]);
       
+      // Show critical data immediately
       setRecentSales(recentSalesData);
+      setLoading(false);
+      
+      // Load remaining data in background with fallbacks
+      const results = await Promise.allSettled([
+        withTimeout(DatabaseService.getProducts(), 3000),
+        withTimeout(DatabaseService.getCustomers(), 3000),
+        withTimeout(DatabaseService.getLowStockItems(10), 2000),
+        withTimeout(DatabaseService.getOutOfStockItems(), 2000)
+      ]);
+      
+      const productsData = results[0].status === 'fulfilled' ? results[0].value : [];
+      const customersData = results[1].status === 'fulfilled' ? results[1].value : [];
+      const lowStockItemsData = results[2].status === 'fulfilled' ? results[2].value : [];
+      const outOfStockItemsData = results[3].status === 'fulfilled' ? results[3].value : [];
+      
       setProducts(productsData);
       setCustomers(customersData);
       setLowStockItems(lowStockItemsData);
@@ -122,6 +149,22 @@ const Reports: React.FC<ReportsProps> = ({ setCurrentPage }) => {
       
     } catch (error) {
       console.error('Error loading reports data:', error);
+      // Show fallback data instead of blocking
+      setSalesSummary({
+        totalSales: 0,
+        totalTransactions: 0,
+        averageTransactionValue: 0,
+        todaySales: 0,
+        thisWeekSales: 0,
+        thisMonthSales: 0,
+      });
+      setInventorySummary({
+        totalProducts: 0,
+        totalVariants: 0,
+        lowStockItems: 0,
+        outOfStockItems: 0,
+        totalStockValue: 0,
+      });
     } finally {
       setLoading(false);
     }

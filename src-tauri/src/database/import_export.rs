@@ -259,14 +259,49 @@ impl ImportExportService {
     }
 
     pub fn import_products_from_csv_content(&mut self, content: &str) -> Result<ImportResult, Box<dyn std::error::Error>> {
+        // Debug logging for CSV content received
+        println!("=== BACKEND: CSV CONTENT RECEIVED ===");
+        println!("Content length: {}", content.len());
+        println!("First 500 characters:");
+        println!("{}", &content[..content.len().min(500)]);
+        
+        // Show line-by-line breakdown
+        let lines: Vec<&str> = content.lines().collect();
+        println!("Total lines: {}", lines.len());
+        println!("First 5 lines:");
+        for (i, line) in lines.iter().enumerate().take(5) {
+            println!("Line {}: (len={}) '{}'", i, line.len(), line);
+        }
+        println!("=== END BACKEND DEBUG ===");
+
         let mut rdr = Reader::from_reader(content.as_bytes());
         let mut success_count = 0;
         let mut error_count = 0;
         let mut errors = Vec::new();
 
+        // Debug: Show headers that the CSV parser detected
+        let headers = rdr.headers();
+        match headers {
+            Ok(headers) => {
+                println!("CSV headers detected: {:?}", headers);
+                println!("Header count: {}", headers.len());
+            }
+            Err(e) => {
+                println!("Error reading CSV headers: {:?}", e);
+            }
+        }
+
         for (row_num, result) in rdr.deserialize().enumerate() {
+            // Debug: Show what we're trying to deserialize
+            if row_num < 3 {
+                println!("Attempting to deserialize row {}: {:?}", row_num + 1, result);
+            }
+            
             match result {
                 Ok(row) => {
+                    if row_num < 3 {
+                        println!("Successfully deserialized row {}: {:?}", row_num + 1, row);
+                    }
                     match self.import_product_row(&row) {
                         Ok(_) => success_count += 1,
                         Err(e) => {
@@ -277,7 +312,9 @@ impl ImportExportService {
                 }
                 Err(e) => {
                     error_count += 1;
-                    errors.push(format!("Row {}: Invalid CSV format - {}", row_num + 2, e));
+                    let error_msg = format!("Row {}: Invalid CSV format - {}", row_num + 2, e);
+                    println!("CSV parsing error: {}", error_msg);
+                    errors.push(error_msg);
                 }
             }
         }

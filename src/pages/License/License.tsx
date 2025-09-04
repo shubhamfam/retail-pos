@@ -28,6 +28,14 @@ const License: React.FC<LicenseProps> = ({ setCurrentPage, onLicenseActivated })
     checkLicenseStatus();
   }, []);
 
+  // Auto-redirect to dashboard if license is active and not expired
+  useEffect(() => {
+    if (activeLicense && !isExpired && !loading) {
+      console.log('License is active and not expired, redirecting to dashboard');
+      setCurrentPage('dashboard');
+    }
+  }, [activeLicense, isExpired, loading, setCurrentPage]);
+
   const checkLicenseStatus = async () => {
     try {
       setLoading(true);
@@ -49,6 +57,11 @@ const License: React.FC<LicenseProps> = ({ setCurrentPage, onLicenseActivated })
             const daysLeft = calculateDaysLeft(license.expires_at!);
             setMessage(`Trial license active. ${daysLeft} days remaining.`);
             setMessageType('info');
+            
+            // Notify parent component that license is active
+            if (onLicenseActivated) {
+              onLicenseActivated();
+            }
           }
         } catch (error) {
           console.error('Error checking license expiration:', error);
@@ -56,6 +69,11 @@ const License: React.FC<LicenseProps> = ({ setCurrentPage, onLicenseActivated })
           setIsExpired(false);
           setMessage(`Trial license active. Please check console for details.`);
           setMessageType('info');
+          
+          // Notify parent component that license is active
+          if (onLicenseActivated) {
+            onLicenseActivated();
+          }
         }
       } else {
         // No active license
@@ -127,7 +145,7 @@ const License: React.FC<LicenseProps> = ({ setCurrentPage, onLicenseActivated })
   };
 
   const handleContactSupport = () => {
-    window.open('mailto:gaikwad.shubham1311@gmail.com?subject=License Request - Clothes Shop POS', '_blank');
+            window.open('mailto:gaikwad.shubham1311@gmail.com?subject=License Request - posly', '_blank');
   };
 
   if (isExpired) {
@@ -225,7 +243,13 @@ const License: React.FC<LicenseProps> = ({ setCurrentPage, onLicenseActivated })
 
         <div className="mt-6 text-center">
           <button
-            onClick={() => setCurrentPage('dashboard')}
+            onClick={() => {
+              // Update the App state to recognize the active license
+              if (onLicenseActivated) {
+                onLicenseActivated();
+              }
+              setCurrentPage('dashboard');
+            }}
             className="text-blue-600 hover:text-blue-800 text-sm"
           >
             Back to Dashboard

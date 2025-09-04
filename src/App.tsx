@@ -10,12 +10,14 @@ import Reports from './pages/Reports/Reports';
 import Settings from './pages/Settings/Settings';
 import Sales from './pages/Sales/Sales';
 import Salesperson from './pages/Salesperson/Salesperson';
-import ImportExport from './pages/ImportExport/ImportExport';
+import Refunds from './pages/Refunds/Refunds';
+// Analytics import removed - page disabled
 import Login from './pages/Auth/Login';
 import License from './pages/License/License';
 import { User } from './types';
 import { useKeyboardShortcuts, createNavigationShortcuts } from './hooks/useKeyboardShortcuts';
 import { invoke } from '@tauri-apps/api/core';
+import logo from './assets/logo.svg';
 import './App.css';
 
 const App: React.FC = () => {
@@ -44,9 +46,21 @@ const App: React.FC = () => {
         // Create predefined licenses if they don't exist
         await invoke('create_predefined_licenses');
         
+        // Create default user if they don't exist
+        await invoke('create_default_user');
+        
+        // Create default categories if they don't exist
+        await invoke('create_default_categories');
+        
+        // Create default brands if they don't exist
+        await invoke('create_default_brands');
+        
+        // Create default salesperson if they don't exist
+        await invoke('create_default_salesperson');
+        
         // Get active license
         const activeLicense = await invoke<any>('get_active_license');
-        const hasLicense = activeLicense !== null;
+        const hasLicense = activeLicense !== null && activeLicense !== undefined;
         console.log('App: License check - activeLicense:', activeLicense, 'hasLicense:', hasLicense);
         setHasActiveLicense(hasLicense);
         
@@ -114,13 +128,12 @@ const App: React.FC = () => {
         return <Salesperson setCurrentPage={setCurrentPage} />;
       case 'settings':
         return <Settings setCurrentPage={setCurrentPage} />;
-      case 'importexport':
-        return <ImportExport setCurrentPage={setCurrentPage} />;
-      case 'license':
-        return <License setCurrentPage={setCurrentPage} onLicenseActivated={() => {
-          setLicenseExpired(false);
-          setCurrentPage('dashboard');
-        }} />;
+      case 'refunds':
+        return <Refunds setCurrentPage={setCurrentPage} />;
+      case 'analytics':
+        // Redirect to dashboard - analytics disabled temporarily
+        setCurrentPage('dashboard');
+        return <Dashboard setCurrentPage={setCurrentPage} />;
       default:
         return <Dashboard setCurrentPage={setCurrentPage} />;
     }
@@ -158,34 +171,13 @@ const App: React.FC = () => {
     <Provider store={store}>
       <div className="flex h-screen bg-gray-100">
         {/* Sidebar */}
-        <div className="w-64 bg-gray-800 text-white p-6">
-          <h1 className="text-2xl font-bold mb-8">Clothes Shop POS</h1>
-          
-          {/* User Info */}
-          <div className="mt-auto p-4 border-t border-gray-700">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">A</span>
-                </div>
-                <div>
-                  <p className="text-white text-sm font-medium">Administrator</p>
-                  <p className="text-gray-400 text-xs">Admin</p>
-                </div>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="text-gray-400 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-gray-700"
-                title="Logout"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-              </button>
-            </div>
+        <div className="w-64 bg-gray-800 text-white p-6 flex flex-col h-full">
+          <div className="flex items-center justify-center mb-8">
+            <img src={logo} alt="POSLY Logo" className="w-32 h-20 object-contain" />
           </div>
           
-          <nav className="space-y-4">
+          {/* Navigation */}
+          <nav className="flex-1 space-y-4">
             <button
               onClick={() => setCurrentPage('dashboard')}
               className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
@@ -226,6 +218,23 @@ const App: React.FC = () => {
             >
               📊 Sales
             </button>
+                    <button
+          onClick={() => setCurrentPage('refunds')}
+          className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
+            currentPage === 'refunds' ? 'bg-blue-600' : 'hover:bg-gray-700'
+          }`}
+        >
+          💰 Refunds
+        </button>
+                    {/* Analytics disabled for now - will be re-enabled in next version */}
+            {/* <button
+          onClick={() => setCurrentPage('analytics')}
+          className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
+            currentPage === 'analytics' ? 'bg-blue-600' : 'hover:bg-gray-700'
+          }`}
+        >
+          📊 Analytics
+        </button> */}
             <button
               onClick={() => setCurrentPage('salesperson')}
               className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
@@ -258,23 +267,32 @@ const App: React.FC = () => {
             >
               ⚙️ Settings
             </button>
-            <button
-              onClick={() => setCurrentPage('importexport')}
-              className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
-                currentPage === 'importexport' ? 'bg-blue-600' : 'hover:bg-gray-700'
-              }`}
-            >
-              📥 Import/Export
-            </button>
-            <button
-              onClick={() => setCurrentPage('license')}
-              className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
-                currentPage === 'license' ? 'bg-blue-600' : 'hover:bg-gray-700'
-              }`}
-            >
-              🔑 License
-            </button>
+
           </nav>
+          
+          {/* User Info */}
+          <div className="mt-auto p-4 border-t border-gray-700">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm font-medium">A</span>
+                </div>
+                <div>
+                  <p className="text-white text-sm font-medium">Administrator</p>
+                  <p className="text-gray-400 text-xs">Admin</p>
+                </div>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="text-gray-400 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-gray-700"
+                title="Logout"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
         
         {/* Main Content */}

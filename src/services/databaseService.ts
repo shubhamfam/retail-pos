@@ -9,7 +9,15 @@ import {
   Salesperson,
   SalespersonStats,
   PaymentMethod,
-  SaleStatus
+  SaleStatus,
+  Category,
+  Brand,
+  AnalyticsSummary,
+  SalesForecast,
+  SalesTrend,
+  ProfitMarginData,
+  ProductPerformance,
+  CustomerPerformance
 } from '../types';
 
 export class DatabaseService {
@@ -343,6 +351,18 @@ export class DatabaseService {
     }
   }
 
+  static async getAllProductVariants(): Promise<ProductVariant[]> {
+    console.log('DatabaseService: Getting all product variants');
+    try {
+      const result = await invoke('get_all_product_variants');
+      console.log('DatabaseService: All product variants retrieved successfully:', result);
+      return result as ProductVariant[];
+    } catch (error) {
+      console.error('DatabaseService: Error getting all product variants:', error);
+      throw error;
+    }
+  }
+
   // Salesperson Management
   static async createSalesperson(
     userId: number,
@@ -446,6 +466,18 @@ export class DatabaseService {
     } catch (error) {
       console.error('Error fetching top performers:', error);
       throw new Error(`Failed to fetch top performers: ${error}`);
+    }
+  }
+
+  static async createDefaultSalesperson(): Promise<number> {
+    try {
+      console.log('Creating default salesperson...');
+      const result = await invoke('create_default_salesperson');
+      console.log('Default salesperson created successfully:', result);
+      return result as number;
+    } catch (error) {
+      console.error('Error creating default salesperson:', error);
+      throw error;
     }
   }
 
@@ -592,7 +624,13 @@ export class DatabaseService {
     errors: string[];
   }> {
     try {
-      console.log('Importing products from CSV content');
+      console.log('=== FRONTEND: SENDING CSV TO BACKEND ===');
+      console.log('Content length:', content.length);
+      console.log('Content type:', typeof content);
+      console.log('First 300 chars:', content.substring(0, 300));
+      console.log('Last 100 chars:', content.substring(Math.max(0, content.length - 100)));
+      console.log('=== END FRONTEND DEBUG ===');
+      
       const result = await invoke('import_products_from_csv_content', { content });
       console.log('Products imported successfully from content:', result);
       return result as {
@@ -654,6 +692,267 @@ export class DatabaseService {
       return result as string;
     } catch (error) {
       console.error('Error generating salesperson template:', error);
+      throw error;
+    }
+  }
+
+  // Refund operations
+  static async createRefund(
+    saleId: number,
+    userId: number,
+    refundAmount: number,
+    refundReason: string,
+    refundType: 'full' | 'partial',
+    notes?: string,
+    items: Array<{
+      sale_item_id: number;
+      quantity: number;
+      refund_amount: number;
+      reason?: string;
+    }> = []
+  ): Promise<number> {
+    try {
+      return await invoke('create_refund', {
+        saleid: saleId,
+        userid: userId,
+        refundamount: refundAmount,
+        refundreason: refundReason,
+        refundtype: refundType,
+        notes,
+        items
+      });
+    } catch (error) {
+      console.error('Error creating refund:', error);
+      throw error;
+    }
+  }
+
+  static async getRefundById(refundId: number): Promise<any> {
+    try {
+      return await invoke('get_refund_by_id', { refund_id: refundId });
+    } catch (error) {
+      console.error('Error getting refund:', error);
+      throw error;
+    }
+  }
+
+  static async getRefundsBySaleId(saleId: number): Promise<any[]> {
+    try {
+      return await invoke('get_refunds_by_sale_id', { sale_id: saleId });
+    } catch (error) {
+      console.error('Error getting refunds for sale:', error);
+      throw error;
+    }
+  }
+
+  static async getAllRefunds(limit?: number): Promise<any[]> {
+    try {
+      return await invoke('get_all_refunds', { limit });
+    } catch (error) {
+      console.error('Error getting all refunds:', error);
+      throw error;
+    }
+  }
+
+  static async updateRefundStatus(refundId: number, status: string): Promise<void> {
+    try {
+      await invoke('update_refund_status', { refundid: refundId, status });
+    } catch (error) {
+      console.error('Error updating refund status:', error);
+      throw error;
+    }
+  }
+
+  static async getRefundStatistics(): Promise<{
+    total_amount: number;
+    total_count: number;
+    today_count: number;
+  }> {
+    try {
+      return await invoke('get_refund_statistics');
+    } catch (error) {
+      console.error('Error getting refund statistics:', error);
+      throw error;
+    }
+  }
+
+  // Category operations
+  static async getCategories(): Promise<Category[]> {
+    try {
+      return await invoke('get_categories');
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      return [];
+    }
+  }
+
+  static async createCategory(category: Omit<Category, 'id'>): Promise<number> {
+    try {
+      return await invoke('create_category', { category });
+    } catch (error) {
+      console.error('Error creating category:', error);
+      throw error;
+    }
+  }
+
+  static async updateCategory(category: Category): Promise<void> {
+    try {
+      await invoke('update_category', { category });
+    } catch (error) {
+      console.error('Error updating category:', error);
+      throw error;
+    }
+  }
+
+  static async deleteCategory(id: number): Promise<void> {
+    try {
+      await invoke('delete_category', { id });
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      throw error;
+    }
+  }
+
+  static async createDefaultCategories(): Promise<void> {
+    try {
+      await invoke('create_default_categories');
+    } catch (error) {
+      console.error('Error creating default categories:', error);
+      throw error;
+    }
+  }
+
+  // Brand operations
+  static async getBrands(): Promise<Brand[]> {
+    try {
+      return await invoke('get_brands');
+    } catch (error) {
+      console.error('Error fetching brands:', error);
+      return [];
+    }
+  }
+
+  static async createBrand(brand: Omit<Brand, 'id'>): Promise<number> {
+    try {
+      return await invoke('create_brand', { brand });
+    } catch (error) {
+      console.error('Error creating brand:', error);
+      throw error;
+    }
+  }
+
+  static async updateBrand(brand: Brand): Promise<void> {
+    try {
+      await invoke('update_brand', { brand });
+    } catch (error) {
+      console.error('Error updating brand:', error);
+      throw error;
+    }
+  }
+
+  static async deleteBrand(id: number): Promise<void> {
+    try {
+      await invoke('delete_brand', { id });
+    } catch (error) {
+      console.error('Error deleting brand:', error);
+      throw error;
+    }
+  }
+
+  static async createDefaultBrands(): Promise<void> {
+    try {
+      await invoke('create_default_brands');
+    } catch (error) {
+      console.error('Error creating default brands:', error);
+      throw error;
+    }
+  }
+
+  // Analytics operations
+  static async getAnalyticsSummary(): Promise<AnalyticsSummary> {
+    try {
+      return await invoke('get_analytics_summary');
+    } catch (error) {
+      console.error('Error fetching analytics summary:', error);
+      throw error;
+    }
+  }
+
+  static async trackAnalyticsEvent(eventType: string, eventData?: string, userId?: number): Promise<void> {
+    try {
+      await invoke('track_analytics_event', { eventType, eventData, userId });
+    } catch (error) {
+      console.error('Error tracking analytics event:', error);
+    }
+  }
+
+  static async trackProductView(productId: number, userId?: number): Promise<void> {
+    try {
+      await invoke('track_product_view', { productId, userId });
+    } catch (error) {
+      console.error('Error tracking product view:', error);
+    }
+  }
+
+  static async generateSalesForecast(productId: number, days: number): Promise<SalesForecast[]> {
+    try {
+      return await invoke('generate_sales_forecast', { productId, days });
+    } catch (error) {
+      console.error('Error generating sales forecast:', error);
+      throw error;
+    }
+  }
+
+  static async getSalesTrends(): Promise<SalesTrend[]> {
+    try {
+      return await invoke('get_sales_trends');
+    } catch (error) {
+      console.error('Error fetching sales trends:', error);
+      throw error;
+    }
+  }
+
+  static async getProfitMargins(): Promise<ProfitMarginData[]> {
+    try {
+      return await invoke('get_profit_margins');
+    } catch (error) {
+      console.error('Error fetching profit margins:', error);
+      throw error;
+    }
+  }
+
+  static async getTopSellingProducts(): Promise<ProductPerformance[]> {
+    try {
+      return await invoke('get_top_selling_products');
+    } catch (error) {
+      console.error('Error fetching top selling products:', error);
+      throw error;
+    }
+  }
+
+  static async getTopCustomers(): Promise<CustomerPerformance[]> {
+    try {
+      return await invoke('get_top_customers');
+    } catch (error) {
+      console.error('Error fetching top customers:', error);
+      throw error;
+    }
+  }
+
+  static async testAnalytics(): Promise<string> {
+    try {
+      return await invoke('test_analytics');
+    } catch (error) {
+      console.error('Error testing analytics:', error);
+      throw error;
+    }
+  }
+
+  static async createSettingsTable(): Promise<string> {
+    try {
+      return await invoke('create_settings_table');
+    } catch (error) {
+      console.error('Error creating settings table:', error);
       throw error;
     }
   }

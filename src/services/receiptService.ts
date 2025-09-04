@@ -61,26 +61,46 @@ export class ReceiptService {
     // Helper function to wrap text to multiple lines
     const wrapText = (text: string, maxLength: number): string[] => {
       const lines: string[] = [];
-      let currentLine = '';
       
-      const words = text.split(' ');
-      for (const word of words) {
-        if ((currentLine + word).length <= maxLength) {
-          currentLine += (currentLine ? ' ' : '') + word;
+      // Handle explicit line breaks first
+      const textLines = text.split('\n');
+      
+      for (const line of textLines) {
+        if (line.length <= maxLength) {
+          // Line fits, pad to exact width
+          lines.push(line.padEnd(maxLength));
         } else {
+          // Line needs wrapping
+          let currentLine = '';
+          const words = line.split(' ');
+          
+          for (const word of words) {
+            const testLine = currentLine ? `${currentLine} ${word}` : word;
+            
+            if (testLine.length <= maxLength) {
+              currentLine = testLine;
+            } else {
+              if (currentLine) {
+                lines.push(currentLine.padEnd(maxLength));
+                currentLine = word;
+              } else {
+                // Single word longer than maxLength, force break
+                while (word.length > maxLength) {
+                  lines.push(word.substring(0, maxLength));
+                  currentLine = word.substring(maxLength);
+                  break;
+                }
+                if (word.length <= maxLength) {
+                  currentLine = word;
+                }
+              }
+            }
+          }
+          
           if (currentLine) {
             lines.push(currentLine.padEnd(maxLength));
-            currentLine = word;
-          } else {
-            // Word is longer than maxLength, split it
-            lines.push(word.substring(0, maxLength).padEnd(maxLength));
-            currentLine = word.substring(maxLength);
           }
         }
-      }
-      
-      if (currentLine) {
-        lines.push(currentLine.padEnd(maxLength));
       }
       
       return lines;
@@ -88,13 +108,20 @@ export class ReceiptService {
     
     // Helper function to pad text to exact width
     const padToWidth = (text: string): string => {
+      if (text.length > receiptWidth) {
+        return text.substring(0, receiptWidth);
+      }
       return text.padEnd(receiptWidth);
     };
     
     // Helper function to center text
     const centerText = (text: string): string => {
+      if (text.length >= receiptWidth) {
+        return text.substring(0, receiptWidth);
+      }
       const padding = Math.max(0, Math.floor((receiptWidth - text.length) / 2));
-      return ' '.repeat(padding) + text + ' '.repeat(receiptWidth - text.length - padding);
+      const rightPadding = receiptWidth - text.length - padding;
+      return ' '.repeat(padding) + text + ' '.repeat(rightPadding);
     };
     
     let receipt = `
@@ -154,13 +181,14 @@ export class ReceiptService {
 
     receipt += `
 ╠${borderChar.repeat(receiptWidth)}╣
-║${'Item'.padEnd(18)}${'Qty'.padEnd(6)}${'Price'.padEnd(8)}║
+║${padToWidth('Item'.padEnd(receiptWidth - 14) + 'Qty'.padEnd(4) + 'Price'.padStart(8))}║
 ╠${borderChar.repeat(receiptWidth)}╣`;
 
     // Add items with wrapping for long item names
     items.forEach(item => {
       const itemName = item.variant ? `${item.productName} (${item.variant})` : item.productName;
-      const itemNameLines = wrapText(itemName, 18);
+      const nameWidth = receiptWidth - 14; // Leave 14 chars for qty (4) + price (8) + spacing (2)
+      const itemNameLines = wrapText(itemName, nameWidth);
       
       // Calculate display price based on tax display setting
       let displayUnitPrice: number;
@@ -180,23 +208,26 @@ export class ReceiptService {
       
       if (itemNameLines.length === 1) {
         // Single line item
-        const qty = item.quantity.toString().padEnd(6);
+        const qty = item.quantity.toString().padEnd(4);
         const price = `${settings.currencySymbol}${displayUnitPrice.toFixed(2)}`.padStart(8);
-        const itemLine = `║${itemNameLines[0]}${qty}${price}║`;
+        const itemLineContent = itemNameLines[0] + qty + price;
+        const itemLine = `║${padToWidth(itemLineContent)}║`;
         receipt += `\n${itemLine}`;
       } else {
         // Multi-line item
         itemNameLines.forEach((line, index) => {
           if (index === 0) {
             // First line with quantity and price
-            const qty = item.quantity.toString().padEnd(6);
+            const qty = item.quantity.toString().padEnd(4);
             const price = `${settings.currencySymbol}${displayUnitPrice.toFixed(2)}`.padStart(8);
-            const itemLine = `║${line}${qty}${price}║`;
+            const itemLineContent = line + qty + price;
+            const itemLine = `║${padToWidth(itemLineContent)}║`;
             receipt += `\n${itemLine}`;
           } else {
             // Additional lines (continuation of item name)
-            const itemLine = `║${line.padEnd(18)}${' '.repeat(6)}${' '.repeat(8)}║`;
-            receipt += `\n${itemLine}`;
+            const continuationContent = line + ' '.repeat(4) + ' '.repeat(8);
+            const continuationLine = `║${padToWidth(continuationContent)}║`;
+            receipt += `\n${continuationLine}`;
           }
         });
       }
@@ -215,16 +246,16 @@ export class ReceiptService {
 
     receipt += `
 ╠${borderChar.repeat(receiptWidth)}╣
-║${'Subtotal:'.padEnd(24)}${settings.currencySymbol}${displaySubtotal.toFixed(2).padStart(7)}║`;
+║${padToWidth('Subtotal:'.padEnd(receiptWidth - 8) + settings.currencySymbol + displaySubtotal.toFixed(2).padStart(7))}║`;
 
     if (showTaxLine) {
       receipt += `
-║${'Tax:'.padEnd(24)}${settings.currencySymbol}${displayTax.toFixed(2).padStart(7)}║`;
+║${padToWidth('Tax:'.padEnd(receiptWidth - 8) + settings.currencySymbol + displayTax.toFixed(2).padStart(7))}║`;
     }
 
     if (sale.discount_amount > 0) {
       receipt += `
-║${'Discount:'.padEnd(24)}${settings.currencySymbol}${sale.discount_amount.toFixed(2).padStart(7)}║`;
+║${padToWidth('Discount:'.padEnd(receiptWidth - 8) + settings.currencySymbol + sale.discount_amount.toFixed(2).padStart(7))}║`;
     }
 
     // Custom fields before total
@@ -239,7 +270,7 @@ export class ReceiptService {
       });
 
     receipt += `
-║${'TOTAL:'.padEnd(24)}${settings.currencySymbol}${displayTotal.toFixed(2).padStart(7)}║`;
+║${padToWidth('TOTAL:'.padEnd(receiptWidth - 8) + settings.currencySymbol + displayTotal.toFixed(2).padStart(7))}║`;
 
     if (settings.showPaymentMethod) {
       const paymentText = `Payment: ${sale.payment_method}`;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DatabaseService } from '../../services/databaseService';
-import { Product, ProductVariant } from '../../types';
+import { Product, ProductVariant, Category, Brand } from '../../types';
 import { useKeyboardShortcuts, createNavigationShortcuts, createFormShortcuts } from '../../hooks/useKeyboardShortcuts';
 import ProductVariants from './ProductVariants';
 
@@ -30,6 +30,16 @@ const Products: React.FC<ProductsProps> = ({ setCurrentPage }) => {
     sku: string;
   }>>([]);
 
+  // Categories state
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  
+  // Brands state
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [brandSearch, setBrandSearch] = useState('');
+  const [showBrandDropdown, setShowBrandDropdown] = useState(false);
+
   // Pagination state
   const [currentPageNum, setCurrentPageNum] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -57,6 +67,24 @@ const Products: React.FC<ProductsProps> = ({ setCurrentPage }) => {
 
   useEffect(() => {
     loadProducts();
+    loadCategories();
+    loadBrands();
+  }, []);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.brand-dropdown') && !target.closest('.category-dropdown')) {
+        setShowBrandDropdown(false);
+        setShowCategoryDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   // Keyboard shortcuts
@@ -106,6 +134,73 @@ const Products: React.FC<ProductsProps> = ({ setCurrentPage }) => {
       console.error('Error loading products:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const categoriesData = await DatabaseService.getCategories();
+      setCategories(categoriesData);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    }
+  };
+
+  const loadBrands = async () => {
+    try {
+      const brandsData = await DatabaseService.getBrands();
+      setBrands(brandsData);
+    } catch (error) {
+      console.error('Error loading brands:', error);
+    }
+  };
+
+  const handleAddBrand = async (brandName: string) => {
+    if (!brandName.trim()) {
+      alert('Please enter a brand name');
+      return;
+    }
+
+    try {
+      await DatabaseService.createBrand({
+        name: brandName.trim(),
+        description: undefined
+      });
+      
+      await loadBrands();
+      // Set the newly created brand as selected
+      setFormData({...formData, brand: brandName.trim()});
+      setBrandSearch('');
+      setShowBrandDropdown(false);
+      alert('Brand added successfully!');
+    } catch (error) {
+      console.error('Error adding brand:', error);
+      alert('Error adding brand. Please try again.');
+    }
+  };
+
+  const handleAddCategory = async (categoryName: string) => {
+    if (!categoryName.trim()) {
+      alert('Please enter a category name');
+      return;
+    }
+
+    try {
+      await DatabaseService.createCategory({
+        name: categoryName.trim(),
+        description: undefined,
+        parentId: undefined
+      });
+      
+      await loadCategories();
+      // Set the newly created category as selected
+      setFormData({...formData, category: categoryName.trim()});
+      setCategorySearch('');
+      setShowCategoryDropdown(false);
+      alert('Category added successfully!');
+    } catch (error) {
+      console.error('Error adding category:', error);
+      alert('Error adding category. Please try again.');
     }
   };
 
@@ -419,32 +514,96 @@ const Products: React.FC<ProductsProps> = ({ setCurrentPage }) => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Brand
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.brand}
-                  onChange={(e) => setFormData({...formData, brand: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                />
+                <div className="relative brand-dropdown">
+                  <input
+                    type="text"
+                    required
+                    value={formData.brand}
+                    onChange={(e) => {
+                      setFormData({...formData, brand: e.target.value});
+                      setBrandSearch(e.target.value);
+                      setShowBrandDropdown(true);
+                    }}
+                    onFocus={() => setShowBrandDropdown(true)}
+                    placeholder="Search or type brand name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  />
+                  {showBrandDropdown && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {brands
+                        .filter(brand => brand.name.toLowerCase().includes(brandSearch.toLowerCase()))
+                        .map(brand => (
+                          <div
+                            key={brand.id}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                            onClick={() => {
+                              setFormData({...formData, brand: brand.name});
+                              setShowBrandDropdown(false);
+                            }}
+                          >
+                            {brand.name}
+                          </div>
+                        ))}
+                      {brandSearch && !brands.some(brand => brand.name.toLowerCase() === brandSearch.toLowerCase()) && (
+                        <div
+                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-t border-gray-200 flex items-center justify-between"
+                          onClick={() => handleAddBrand(brandSearch)}
+                        >
+                          <span>Add "{brandSearch}"</span>
+                          <span className="text-blue-600">+</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Category
                 </label>
-                <select
-                  required
-                  value={formData.category}
-                  onChange={(e) => setFormData({...formData, category: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select Category</option>
-                  <option value="Men">Men</option>
-                  <option value="Women">Women</option>
-                  <option value="Kids">Kids</option>
-                  <option value="Accessories">Accessories</option>
-                  <option value="Footwear">Footwear</option>
-                </select>
+                <div className="relative category-dropdown">
+                  <input
+                    type="text"
+                    required
+                    value={formData.category}
+                    onChange={(e) => {
+                      setFormData({...formData, category: e.target.value});
+                      setCategorySearch(e.target.value);
+                      setShowCategoryDropdown(true);
+                    }}
+                    onFocus={() => setShowCategoryDropdown(true)}
+                    placeholder="Search or type category name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  />
+                  {showCategoryDropdown && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {categories
+                        .filter(category => category.name.toLowerCase().includes(categorySearch.toLowerCase()))
+                        .map(category => (
+                          <div
+                            key={category.id}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                            onClick={() => {
+                              setFormData({...formData, category: category.name});
+                              setShowCategoryDropdown(false);
+                            }}
+                          >
+                            {category.name}
+                          </div>
+                        ))}
+                      {categorySearch && !categories.some(category => category.name.toLowerCase() === categorySearch.toLowerCase()) && (
+                        <div
+                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-t border-gray-200 flex items-center justify-between"
+                          onClick={() => handleAddCategory(categorySearch)}
+                        >
+                          <span>Add "{categorySearch}"</span>
+                          <span className="text-blue-600">+</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
               
                              <div>

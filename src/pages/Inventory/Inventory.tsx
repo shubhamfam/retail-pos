@@ -9,12 +9,15 @@ interface InventoryProps {
 const Inventory: React.FC<InventoryProps> = ({ setCurrentPage }) => {
   const [lowStockItems, setLowStockItems] = useState<ProductVariant[]>([]);
   const [outOfStockItems, setOutOfStockItems] = useState<ProductVariant[]>([]);
+  const [allProductVariants, setAllProductVariants] = useState<ProductVariant[]>([]);
   const [loading, setLoading] = useState(true);
   const [lowStockThreshold, setLowStockThreshold] = useState(10);
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
   const [showBulkAdjustmentModal, setShowBulkAdjustmentModal] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+  const [selectedVariants, setSelectedVariants] = useState<ProductVariant[]>([]);
   const [adjustmentAmount, setAdjustmentAmount] = useState(0);
+  const [adjustmentInput, setAdjustmentInput] = useState('');
 
   useEffect(() => {
     loadSettingsAndData();
@@ -46,12 +49,14 @@ const Inventory: React.FC<InventoryProps> = ({ setCurrentPage }) => {
   const loadInventoryData = async () => {
     try {
       setLoading(true);
-      const [lowStock, outOfStock] = await Promise.all([
+      const [lowStock, outOfStock, allVariants] = await Promise.all([
         DatabaseService.getLowStockItems(lowStockThreshold),
-        DatabaseService.getOutOfStockItems()
+        DatabaseService.getOutOfStockItems(),
+        DatabaseService.getAllProductVariants()
       ]);
       setLowStockItems(lowStock);
       setOutOfStockItems(outOfStock);
+      setAllProductVariants(allVariants);
     } catch (error) {
       console.error('Error loading inventory data:', error);
     } finally {
@@ -70,6 +75,27 @@ const Inventory: React.FC<InventoryProps> = ({ setCurrentPage }) => {
       loadInventoryData(); // Refresh data
     } catch (error) {
       console.error('Error adjusting stock:', error);
+    }
+  };
+
+  const handleBulkStockAdjustment = async () => {
+    if (selectedVariants.length === 0 || adjustmentAmount === 0) return;
+
+    try {
+      // Apply adjustment to all selected variants
+      const promises = selectedVariants.map(variant => 
+        DatabaseService.adjustStockQuantity(variant.id!, adjustmentAmount)
+      );
+      
+      await Promise.all(promises);
+      
+      setShowBulkAdjustmentModal(false);
+      setSelectedVariants([]);
+      setAdjustmentAmount(0);
+      setAdjustmentInput('');
+      loadInventoryData(); // Refresh data
+    } catch (error) {
+      console.error('Error adjusting bulk stock:', error);
     }
   };
 
@@ -373,27 +399,51 @@ const Inventory: React.FC<InventoryProps> = ({ setCurrentPage }) => {
                 Adjustment Amount (+/-)
               </label>
               <input
-                type="number"
-                value={adjustmentAmount}
-                onChange={(e) => setAdjustmentAmount(Number(e.target.value))}
+                type="text"
+                value={adjustmentInput}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setAdjustmentInput(value);
+                  // Convert to number for the adjustment amount
+                  if (value === '' || value === '-') {
+                    setAdjustmentAmount(0);
+                  } else if (/^-?\d+$/.test(value)) {
+                    setAdjustmentAmount(Number(value));
+                  }
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                 placeholder="e.g., 10 for +10, -5 for -5"
               />
             </div>
 
             <div className="mb-4">
-              <h4 className="text-md font-medium text-gray-800 mb-2">Select Items to Adjust:</h4>
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-md font-medium text-gray-800">Select Items to Adjust:</h4>
+                <button
+                  onClick={() => {
+                    if (selectedVariants.length === allProductVariants.length) {
+                      setSelectedVariants([]);
+                    } else {
+                      setSelectedVariants([...allProductVariants]);
+                    }
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-800"
+                >
+                  {selectedVariants.length === allProductVariants.length ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                {[...lowStockItems, ...outOfStockItems].map((variant) => (
+                {allProductVariants.map((variant) => (
                   <label key={variant.id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded">
                     <input
                       type="checkbox"
+                      checked={selectedVariants.some(v => v.id === variant.id)}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedVariant(variant);
+                          setSelectedVariants([...selectedVariants, variant]);
                         } else {
-                          setSelectedVariant(null);
+                          setSelectedVariants(selectedVariants.filter(v => v.id !== variant.id));
                         }
                       }}
                     />
@@ -409,24 +459,20 @@ const Inventory: React.FC<InventoryProps> = ({ setCurrentPage }) => {
               <button
                 onClick={() => {
                   setShowBulkAdjustmentModal(false);
-                  setSelectedVariant(null);
+                  setSelectedVariants([]);
                   setAdjustmentAmount(0);
+                  setAdjustmentInput('');
                 }}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md"
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  if (selectedVariant && adjustmentAmount !== 0) {
-                    handleStockAdjustment();
-                    setShowBulkAdjustmentModal(false);
-                  }
-                }}
-                disabled={!selectedVariant || adjustmentAmount === 0}
+                onClick={handleBulkStockAdjustment}
+                disabled={selectedVariants.length === 0 || adjustmentAmount === 0}
                 className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Apply to Selected
+                Apply to Selected ({selectedVariants.length} items)
               </button>
             </div>
           </div>

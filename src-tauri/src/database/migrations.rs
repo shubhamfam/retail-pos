@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result};
 
-pub const CURRENT_VERSION: u32 = 5;
+pub const CURRENT_VERSION: u32 = 8;
 
 pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     let current_version = get_current_version(conn)?;
@@ -20,6 +20,15 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     if current_version < 5 {
         run_migration_5(conn)?;
     }
+                    if current_version < 6 {
+                    run_migration_6(conn)?;
+                }
+                        if current_version < 7 {
+            run_migration_7(conn)?;
+        }
+        if current_version < 8 {
+            run_migration_8(conn)?;
+        }
     
     Ok(())
 }
@@ -41,7 +50,7 @@ fn get_current_version(conn: &Connection) -> Result<u32, rusqlite::Error> {
 }
 
 fn run_migration_4(conn: &Connection) -> Result<(), rusqlite::Error> {
-    println!("Running migration 4: Adding salesperson_id to sales table");
+    println!("Running migration 4: Adding salesperson_id to sales table and settings table");
     
     // Create salespersons table if it doesn't exist
     conn.execute(
@@ -65,6 +74,22 @@ fn run_migration_4(conn: &Connection) -> Result<(), rusqlite::Error> {
         "ALTER TABLE sales ADD COLUMN salesperson_id INTEGER REFERENCES salespersons (id)",
         [],
     ).ok(); // Use .ok() to ignore if column already exists
+
+    // Create settings table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            value TEXT NOT NULL,
+            description TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+    
+    // Create settings index
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key)", [])?;
 
     // Update version
     conn.execute(
@@ -387,6 +412,168 @@ fn run_migration_3(connection: &Connection) -> Result<()> {
     connection.execute("CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at)", [])?;
     connection.execute("CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id)", [])?;
 
+    Ok(())
+}
+
+pub fn run_migration_6(conn: &Connection) -> Result<(), rusqlite::Error> {
+    println!("Running migration 6: Adding refunds and refund_items tables");
+    
+    // Create refunds table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS refunds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sale_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            refund_amount REAL NOT NULL,
+            refund_reason TEXT NOT NULL,
+            refund_type TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            notes TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            processed_at DATETIME,
+            FOREIGN KEY (sale_id) REFERENCES sales (id),
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )",
+        [],
+    )?;
+    
+    // Create refund_items table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS refund_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            refund_id INTEGER NOT NULL,
+            sale_item_id INTEGER NOT NULL,
+            product_variant_id INTEGER NOT NULL,
+            quantity INTEGER NOT NULL,
+            unit_price REAL NOT NULL,
+            refund_amount REAL NOT NULL,
+            reason TEXT,
+            FOREIGN KEY (refund_id) REFERENCES refunds (id) ON DELETE CASCADE,
+            FOREIGN KEY (sale_item_id) REFERENCES sale_items (id),
+            FOREIGN KEY (product_variant_id) REFERENCES product_variants (id)
+        )",
+        [],
+    )?;
+    
+    // Create refund indexes
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_refunds_sale_id ON refunds(sale_id)", [])?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_refunds_user_id ON refunds(user_id)", [])?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_refunds_created_at ON refunds(created_at)", [])?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_refund_items_refund_id ON refund_items(refund_id)", [])?;
+
+    // Update version
+    conn.execute(
+        "INSERT OR REPLACE INTO db_version (version) VALUES (?)",
+        [6],
+    )?;
+
+    println!("Migration 6 completed successfully");
+    Ok(())
+}
+
+pub fn run_migration_7(conn: &Connection) -> Result<(), rusqlite::Error> {
+    println!("Running migration 7: Adding brands table");
+    
+    // Create brands table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS brands (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    )?;
+    
+    // Create brand indexes
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_brands_name ON brands(name)", [])?;
+
+    // Update version
+    conn.execute(
+        "INSERT OR REPLACE INTO db_version (version) VALUES (?)",
+        [7],
+    )?;
+
+    println!("Migration 7 completed successfully");
+    Ok(())
+}
+
+pub fn run_migration_8(conn: &Connection) -> Result<(), rusqlite::Error> {
+    println!("Running migration 8: Adding analytics tables");
+    
+    // Create analytics_events table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS analytics_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT NOT NULL,
+            event_data TEXT,
+            user_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )",
+        [],
+    )?;
+    
+    // Create product_views table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS product_views (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            user_id INTEGER,
+            viewed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products (id),
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )",
+        [],
+    )?;
+    
+    // Create sales_forecasts table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS sales_forecasts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            forecast_date DATE NOT NULL,
+            predicted_quantity INTEGER NOT NULL,
+            confidence_level REAL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products (id)
+        )",
+        [],
+    )?;
+    
+    // Create profit_margins table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS profit_margins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            sale_id INTEGER NOT NULL,
+            cost_price REAL NOT NULL,
+            selling_price REAL NOT NULL,
+            profit_margin REAL NOT NULL,
+            profit_percentage REAL NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products (id),
+            FOREIGN KEY (sale_id) REFERENCES sales (id)
+        )",
+        [],
+    )?;
+    
+    // Create analytics indexes
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_analytics_events_type ON analytics_events(event_type)", [])?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_analytics_events_created_at ON analytics_events(created_at)", [])?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_product_views_product_id ON product_views(product_id)", [])?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_product_views_viewed_at ON product_views(viewed_at)", [])?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sales_forecasts_date ON sales_forecasts(forecast_date)", [])?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_profit_margins_product_id ON profit_margins(product_id)", [])?;
+
+    // Update version
+    conn.execute(
+        "INSERT OR REPLACE INTO db_version (version) VALUES (?)",
+        [8],
+    )?;
+
+    println!("Migration 8 completed successfully");
     Ok(())
 }
 

@@ -101,6 +101,112 @@ pub struct Category {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct Brand {
+    pub id: Option<i32>,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AnalyticsEvent {
+    pub id: Option<i32>,
+    pub event_type: String,
+    pub event_data: Option<String>,
+    pub user_id: Option<i32>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProductView {
+    pub id: Option<i32>,
+    pub product_id: i32,
+    pub user_id: Option<i32>,
+    pub viewed_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SalesForecast {
+    pub id: Option<i32>,
+    pub product_id: i32,
+    pub forecast_date: String,
+    pub predicted_quantity: i32,
+    pub confidence_level: Option<f64>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProfitMargin {
+    pub id: Option<i32>,
+    pub product_id: i32,
+    pub sale_id: i32,
+    pub cost_price: f64,
+    pub selling_price: f64,
+    pub profit_margin: f64,
+    pub profit_percentage: f64,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AnalyticsSummary {
+    pub total_sales: f64,
+    pub total_orders: i32,
+    pub average_order_value: f64,
+    pub total_customers: i32,
+    pub total_products: i32,
+    pub low_stock_items: i32,
+    pub out_of_stock_items: i32,
+    pub today_sales: f64,
+    pub today_orders: i32,
+    pub monthly_sales: f64,
+    pub monthly_orders: i32,
+    pub top_selling_products: Vec<ProductPerformance>,
+    pub top_customers: Vec<CustomerPerformance>,
+    pub sales_trends: Vec<SalesTrend>,
+    pub profit_margins: Vec<ProfitMarginData>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProductPerformance {
+    pub product_id: i32,
+    pub product_name: String,
+    pub total_sales: f64,
+    pub total_quantity: i32,
+    pub profit_margin: f64,
+    pub views: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CustomerPerformance {
+    pub customer_id: i32,
+    pub customer_name: String,
+    pub total_spent: f64,
+    pub total_orders: i32,
+    pub average_order_value: f64,
+    pub last_order_date: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SalesTrend {
+    pub date: String,
+    pub sales: f64,
+    pub orders: i32,
+    pub customers: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProfitMarginData {
+    pub product_id: i32,
+    pub product_name: String,
+    pub cost_price: f64,
+    pub selling_price: f64,
+    pub profit_margin: f64,
+    pub profit_percentage: f64,
+    pub total_quantity: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Supplier {
     pub id: Option<i32>,
     pub name: String,
@@ -237,6 +343,93 @@ impl Setting {
             description: row.get(3)?,
             created_at: row.get(4)?,
             updated_at: row.get(5)?,
+        })
+    }
+}
+
+impl Category {
+    pub fn from_row(row: &Row) -> rusqlite::Result<Self> {
+        Ok(Category {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            parent_id: row.get(2)?,
+            description: row.get(3)?,
+        })
+    }
+}
+
+impl Brand {
+    pub fn from_row(row: &Row) -> rusqlite::Result<Self> {
+        Ok(Brand {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            description: row.get(2)?,
+            created_at: row.get(3)?,
+            updated_at: row.get(4)?,
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Refund {
+    pub id: Option<i32>,
+    pub sale_id: i32,
+    pub user_id: i32,
+    pub refund_amount: f64,
+    pub refund_reason: String,
+    pub refund_type: String, // 'full' or 'partial'
+    pub status: String, // 'pending', 'approved', 'completed', 'cancelled'
+    pub notes: Option<String>,
+    pub created_at: Option<String>,
+    pub processed_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RefundItem {
+    pub id: Option<i32>,
+    pub refund_id: i32,
+    pub sale_item_id: i32,
+    pub product_variant_id: i32,
+    pub quantity: i32,
+    pub unit_price: f64,
+    pub refund_amount: f64,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RefundWithItems {
+    pub refund: Refund,
+    pub items: Vec<RefundItem>,
+}
+
+impl Refund {
+    pub fn from_row(row: &Row) -> rusqlite::Result<Self> {
+        Ok(Refund {
+            id: row.get(0)?,
+            sale_id: row.get(1)?,
+            user_id: row.get(2)?,
+            refund_amount: row.get(3)?,
+            refund_reason: row.get(4)?,
+            refund_type: row.get(5)?,
+            status: row.get(6)?,
+            notes: row.get(7)?,
+            created_at: row.get(8)?,
+            processed_at: row.get(9)?,
+        })
+    }
+}
+
+impl RefundItem {
+    pub fn from_row(row: &Row) -> rusqlite::Result<Self> {
+        Ok(RefundItem {
+            id: row.get(0)?,
+            refund_id: row.get(1)?,
+            sale_item_id: row.get(2)?,
+            product_variant_id: row.get(3)?,
+            quantity: row.get(4)?,
+            unit_price: row.get(5)?,
+            refund_amount: row.get(6)?,
+            reason: row.get(7)?,
         })
     }
 } 

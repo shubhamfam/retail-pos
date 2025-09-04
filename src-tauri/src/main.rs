@@ -4,7 +4,7 @@
 mod database;
 
 use tauri::{AppHandle, Manager};
-use database::{Database, connection::{ProductService, CustomerService, SaleService, UserService, SalespersonService, SettingsService, LicenseService}, import_export::ImportExportService};
+use database::{Database, connection::{ProductService, CustomerService, SaleService, UserService, SalespersonService, SettingsService, LicenseService, RefundService, CategoryService, BrandService, AnalyticsService}, import_export::ImportExportService};
 use database::models::*;
 use serde::Deserialize;
 use std::fs;
@@ -18,6 +18,13 @@ struct SaleItemData {
     total: f64,
 }
 
+#[derive(Deserialize)]
+struct RefundItemData {
+    sale_item_id: i32,
+    quantity: i32,
+    refund_amount: f64,
+    reason: Option<String>,
+}
 
 
 fn main() {
@@ -51,6 +58,7 @@ fn main() {
             get_out_of_stock_items,
             adjust_stock_quantity,
             get_product_variants,
+        get_all_product_variants,
             create_product_variant,
             update_product_variant,
             delete_product_variant,
@@ -59,6 +67,7 @@ fn main() {
             get_all_salespersons,
             get_salesperson_performance,
             get_top_performers,
+        create_default_salesperson,
             save_receipt,
             get_setting,
             set_setting,
@@ -83,6 +92,32 @@ fn main() {
             reset_license_system,
             debug_license_status,
             check_date_format,
+            create_refund,
+            get_refund_by_id,
+            get_refunds_by_sale_id,
+            get_all_refunds,
+            update_refund_status,
+            get_refund_statistics,
+            get_categories,
+            create_category,
+            update_category,
+            delete_category,
+            create_default_categories,
+            get_brands,
+            create_brand,
+            update_brand,
+            delete_brand,
+            create_default_brands,
+            get_analytics_summary,
+            track_analytics_event,
+            track_product_view,
+            generate_sales_forecast,
+            get_sales_trends,
+            get_profit_margins,
+            get_top_selling_products,
+            get_top_customers,
+            test_analytics,
+            create_settings_table,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -399,6 +434,14 @@ async fn get_product_variants(app_handle: AppHandle, product_id: i32) -> Result<
 }
 
 #[tauri::command]
+async fn get_all_product_variants(app_handle: AppHandle) -> Result<Vec<ProductVariant>, String> {
+    let db = app_handle.state::<Database>();
+    let product_service = ProductService::new(db.connection.clone());
+    
+    product_service.get_all_product_variants().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn create_product_variant(app_handle: AppHandle, variant: ProductVariant) -> Result<i32, String> {
     let db = app_handle.state::<Database>();
     let product_service = ProductService::new(db.connection.clone());
@@ -483,6 +526,14 @@ async fn get_top_performers(app_handle: AppHandle, period: String, limit: i32) -
     let db = app_handle.state::<Database>();
     let conn = db.connection.lock().unwrap();
     SalespersonService::get_top_performers(&conn, &period, limit)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn create_default_salesperson(app_handle: AppHandle) -> Result<i32, String> {
+    let db = app_handle.state::<Database>();
+    let conn = db.connection.lock().unwrap();
+    SalespersonService::create_default_salesperson(&conn)
         .map_err(|e| e.to_string())
 }
 
@@ -851,6 +902,303 @@ async fn check_date_format(app_handle: AppHandle) -> Result<String, String> {
     }
     
     Ok(result)
+}
+
+#[tauri::command]
+async fn create_refund(
+    app_handle: AppHandle,
+    saleid: i32,
+    userid: i32,
+    refundamount: f64,
+    refundreason: String,
+    refundtype: String,
+    notes: Option<String>,
+    items: Vec<RefundItemData>,
+) -> Result<i32, String> {
+    let db = app_handle.state::<Database>();
+    let refund_service = RefundService::new(db.connection.clone());
+    
+    // Convert items to the format expected by the service
+    let refund_items: Vec<(i32, i32, f64, Option<String>)> = items
+        .into_iter()
+        .map(|item| (item.sale_item_id, item.quantity, item.refund_amount, item.reason))
+        .collect();
+    
+    refund_service.create_refund(
+        saleid,
+        userid,
+        refundamount,
+        refundreason,
+        refundtype,
+        notes,
+        refund_items,
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_refund_by_id(app_handle: AppHandle, refund_id: i32) -> Result<Option<RefundWithItems>, String> {
+    let db = app_handle.state::<Database>();
+    let refund_service = RefundService::new(db.connection.clone());
+    
+    refund_service.get_refund_by_id(refund_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_refunds_by_sale_id(app_handle: AppHandle, sale_id: i32) -> Result<Vec<RefundWithItems>, String> {
+    let db = app_handle.state::<Database>();
+    let refund_service = RefundService::new(db.connection.clone());
+    
+    refund_service.get_refunds_by_sale_id(sale_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_all_refunds(app_handle: AppHandle, limit: Option<i32>) -> Result<Vec<RefundWithItems>, String> {
+    let db = app_handle.state::<Database>();
+    let refund_service = RefundService::new(db.connection.clone());
+    
+    refund_service.get_all_refunds(limit)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn update_refund_status(app_handle: AppHandle, refundid: i32, status: String) -> Result<(), String> {
+    let db = app_handle.state::<Database>();
+    let refund_service = RefundService::new(db.connection.clone());
+    
+    refund_service.update_refund_status(refundid, status)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_refund_statistics(app_handle: AppHandle) -> Result<serde_json::Value, String> {
+    let db = app_handle.state::<Database>();
+    let refund_service = RefundService::new(db.connection.clone());
+    
+    let (total_amount, total_count, today_count) = refund_service.get_refund_statistics()
+        .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::json!({
+        "total_amount": total_amount,
+        "total_count": total_count,
+        "today_count": today_count
+    }))
+}
+
+#[tauri::command]
+async fn get_categories(app_handle: AppHandle) -> Result<Vec<Category>, String> {
+    let db = app_handle.state::<Database>();
+    let category_service = CategoryService::new(db.connection.clone());
+    
+    category_service.get_all_categories()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn create_category(app_handle: AppHandle, category: Category) -> Result<i32, String> {
+    let db = app_handle.state::<Database>();
+    let category_service = CategoryService::new(db.connection.clone());
+    
+    category_service.create_category(&category)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn update_category(app_handle: AppHandle, category: Category) -> Result<(), String> {
+    let db = app_handle.state::<Database>();
+    let category_service = CategoryService::new(db.connection.clone());
+    
+    category_service.update_category(&category)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn delete_category(app_handle: AppHandle, id: i32) -> Result<(), String> {
+    let db = app_handle.state::<Database>();
+    let category_service = CategoryService::new(db.connection.clone());
+    
+    category_service.delete_category(id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn create_default_categories(app_handle: AppHandle) -> Result<(), String> {
+    let db = app_handle.state::<Database>();
+    let category_service = CategoryService::new(db.connection.clone());
+    
+    category_service.create_default_categories()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_brands(app_handle: AppHandle) -> Result<Vec<Brand>, String> {
+    let db = app_handle.state::<Database>();
+    let brand_service = BrandService::new(db.connection.clone());
+    
+    brand_service.get_all_brands()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn create_brand(app_handle: AppHandle, brand: Brand) -> Result<i32, String> {
+    let db = app_handle.state::<Database>();
+    let brand_service = BrandService::new(db.connection.clone());
+    
+    brand_service.create_brand(&brand)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn update_brand(app_handle: AppHandle, brand: Brand) -> Result<(), String> {
+    let db = app_handle.state::<Database>();
+    let brand_service = BrandService::new(db.connection.clone());
+    
+    brand_service.update_brand(&brand)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn delete_brand(app_handle: AppHandle, id: i32) -> Result<(), String> {
+    let db = app_handle.state::<Database>();
+    let brand_service = BrandService::new(db.connection.clone());
+    
+    brand_service.delete_brand(id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn create_default_brands(app_handle: AppHandle) -> Result<(), String> {
+    let db = app_handle.state::<Database>();
+    let brand_service = BrandService::new(db.connection.clone());
+    
+    brand_service.create_default_brands()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_analytics_summary(app_handle: AppHandle) -> Result<AnalyticsSummary, String> {
+    let db = app_handle.state::<Database>();
+    let analytics_service = AnalyticsService::new(db.connection.clone());
+    
+    analytics_service.get_analytics_summary()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn track_analytics_event(
+    app_handle: AppHandle,
+    event_type: String,
+    event_data: Option<String>,
+    user_id: Option<i32>,
+) -> Result<(), String> {
+    let db = app_handle.state::<Database>();
+    let analytics_service = AnalyticsService::new(db.connection.clone());
+    
+    analytics_service.track_event(&event_type, event_data.as_deref(), user_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn track_product_view(
+    app_handle: AppHandle,
+    product_id: i32,
+    user_id: Option<i32>,
+) -> Result<(), String> {
+    let db = app_handle.state::<Database>();
+    let analytics_service = AnalyticsService::new(db.connection.clone());
+    
+    analytics_service.track_product_view(product_id, user_id)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn generate_sales_forecast(
+    app_handle: AppHandle,
+    product_id: i32,
+    days: i32,
+) -> Result<Vec<SalesForecast>, String> {
+    let db = app_handle.state::<Database>();
+    let analytics_service = AnalyticsService::new(db.connection.clone());
+    
+    analytics_service.generate_sales_forecast(product_id, days)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_sales_trends(app_handle: AppHandle) -> Result<Vec<SalesTrend>, String> {
+    let db = app_handle.state::<Database>();
+    let analytics_service = AnalyticsService::new(db.connection.clone());
+    
+    analytics_service.get_sales_trends()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_profit_margins(app_handle: AppHandle) -> Result<Vec<ProfitMarginData>, String> {
+    let db = app_handle.state::<Database>();
+    let analytics_service = AnalyticsService::new(db.connection.clone());
+    
+    analytics_service.get_profit_margins()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_top_selling_products(app_handle: AppHandle) -> Result<Vec<ProductPerformance>, String> {
+    let db = app_handle.state::<Database>();
+    let analytics_service = AnalyticsService::new(db.connection.clone());
+    
+    analytics_service.get_top_selling_products()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_top_customers(app_handle: AppHandle) -> Result<Vec<CustomerPerformance>, String> {
+    let db = app_handle.state::<Database>();
+    let analytics_service = AnalyticsService::new(db.connection.clone());
+    
+    analytics_service.get_top_customers()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn test_analytics(app_handle: AppHandle) -> Result<String, String> {
+    let db = app_handle.state::<Database>();
+    let analytics_service = AnalyticsService::new(db.connection.clone());
+    
+    match analytics_service.get_analytics_summary() {
+        Ok(summary) => Ok(format!("Analytics working! Total sales: {}", summary.total_sales)),
+        Err(e) => Err(format!("Analytics error: {}", e))
+    }
+}
+
+#[tauri::command]
+async fn create_settings_table(app_handle: AppHandle) -> Result<String, String> {
+    let db = app_handle.state::<Database>();
+    let connection = db.connection.lock().unwrap();
+    
+    // Create settings table
+    match connection.execute(
+        "CREATE TABLE IF NOT EXISTS settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            value TEXT NOT NULL,
+            description TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )",
+        [],
+    ) {
+        Ok(_) => {
+            // Create settings index
+            match connection.execute("CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key)", []) {
+                Ok(_) => Ok("Settings table created successfully".to_string()),
+                Err(e) => Err(format!("Error creating settings index: {}", e))
+            }
+        },
+        Err(e) => Err(format!("Error creating settings table: {}", e))
+    }
 }
 
 

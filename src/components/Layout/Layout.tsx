@@ -11,6 +11,7 @@ import {
   CogIcon,
   ArrowRightOnRectangleIcon,
 } from '@heroicons/react/24/outline';
+import logo from '../../assets/logo.svg';
 
 const Layout: React.FC = () => {
   console.log('Layout component rendering...');
@@ -39,7 +40,7 @@ const Layout: React.FC = () => {
       {/* Sidebar */}
       <div className="w-64 bg-white shadow-lg">
         <div className="flex items-center justify-center h-16 bg-primary-600 text-white">
-          <h1 className="text-xl font-bold">Clothes Shop POS</h1>
+          <img src={logo} alt="POSLY Logo" className="w-32 h-10 object-contain" />
         </div>
         
         <nav className="mt-8">
