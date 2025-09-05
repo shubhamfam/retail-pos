@@ -730,6 +730,14 @@ async fn generate_product_template(app_handle: AppHandle, file_path: String) -> 
     let db = app_handle.state::<Database>();
     let import_export_service = ImportExportService::new(db.connection.clone());
     
+    println!("🔧 OLD generate_product_template called with path: '{}'", file_path);
+    println!("🔧 Path length: {}", file_path.len());
+    
+    if file_path.is_empty() {
+        println!("❌ OLD function received empty file path! This function requires a valid path.");
+        return Err("File path is required for this function. Use saveTemplateWithDialog instead.".to_string());
+    }
+    
     import_export_service.generate_product_template(&file_path)
         .map_err(|e| e.to_string())?;
     
@@ -748,29 +756,96 @@ async fn generate_customer_template(app_handle: AppHandle, file_path: String) ->
 }
 
 #[tauri::command]
-async fn save_template_with_dialog(app_handle: AppHandle, template_type: String) -> Result<String, String> {
+async fn save_template_with_dialog(app_handle: AppHandle, templateType: String) -> Result<String, String> {
     let db = app_handle.state::<Database>();
     let import_export_service = ImportExportService::new(db.connection.clone());
     
-    // Get the Documents directory for saving templates
-    let documents_dir = dirs::document_dir()
-        .unwrap_or_else(|| std::env::current_dir().unwrap());
+    // Debug: Log the template type
+    println!("🔍 Generating template for type: '{}'", templateType);
+    println!("🔍 Template type length: {}", templateType.len());
     
-    // Create the file path in Documents
-    let file_path = documents_dir.join(format!("{}_template.csv", template_type));
+    // Validate and fix template type
+    let templateType = if templateType.is_empty() {
+        println!("❌ Template type is empty! Using 'products' as fallback");
+        "products".to_string()
+    } else {
+        templateType
+    };
+    
+    println!("🔍 Final template type: '{}'", templateType);
+    
+    // Try multiple directory options in order of preference
+    let target_dir = if let Some(docs) = dirs::document_dir() {
+        println!("📁 Using Documents directory: {}", docs.display());
+        docs
+    } else if let Ok(current) = std::env::current_dir() {
+        println!("📁 Using current directory: {}", current.display());
+        current
+    } else if let Some(home) = dirs::home_dir() {
+        println!("📁 Using home directory: {}", home.display());
+        home
+    } else {
+        println!("📁 Using temp directory");
+        std::env::temp_dir()
+    };
+    
+    println!("📁 Target directory: {}", target_dir.display());
+    
+    // Ensure the target directory exists
+    if !target_dir.exists() {
+        println!("📂 Creating directory: {}", target_dir.display());
+        std::fs::create_dir_all(&target_dir)
+            .map_err(|e| format!("Failed to create directory {}: {}", target_dir.display(), e))?;
+    } else {
+        println!("✅ Directory exists: {}", target_dir.display());
+    }
+    
+    // Create the file path in target directory
+    let file_path = target_dir.join(format!("{}_template.csv", templateType));
+    println!("📄 Target file path: {}", file_path.display());
+    
+    // Convert path to string safely
+    let file_path_str = file_path.to_str()
+        .ok_or_else(|| {
+            println!("❌ Failed to convert file path to string! Path: {:?}", file_path);
+            "Failed to convert file path to string".to_string()
+        })?;
+    
+    println!("🔗 File path string: '{}'", file_path_str);
+    
+    // Additional validation
+    if file_path_str.is_empty() {
+        println!("❌ File path is empty! Using fallback path");
+        // Emergency fallback - try current directory with simple name
+        let fallback_path = format!("{}_template.csv", templateType);
+        println!("🔄 Using fallback path: {}", fallback_path);
+        
+        match templateType.as_str() {
+            "products" => {
+                import_export_service.generate_product_template(&fallback_path)
+                    .map_err(|e| format!("Failed to generate product template with fallback: {}", e))?;
+            },
+            _ => return Err("Unsupported template type with fallback".to_string()),
+        }
+        
+        return Ok(format!("✅ Template generated with fallback path: {}", fallback_path));
+    }
     
     // Generate the template
-    if template_type == "products" {
-        import_export_service.generate_product_template(file_path.to_str().unwrap())
-            .map_err(|e| e.to_string())?;
-    } else if template_type == "customers" {
-        import_export_service.generate_customer_template(file_path.to_str().unwrap())
-            .map_err(|e| e.to_string())?;
-    } else if template_type == "salespersons" {
-        import_export_service.generate_salesperson_template(file_path.to_str().unwrap())
-            .map_err(|e| e.to_string())?;
-    } else {
-        return Err("Invalid template type".to_string());
+    match templateType.as_str() {
+        "products" => {
+            import_export_service.generate_product_template(file_path_str)
+                .map_err(|e| format!("Failed to generate product template: {}", e))?;
+        },
+        "customers" => {
+            import_export_service.generate_customer_template(file_path_str)
+                .map_err(|e| format!("Failed to generate customer template: {}", e))?;
+        },
+        "salespersons" => {
+            import_export_service.generate_salesperson_template(file_path_str)
+                .map_err(|e| format!("Failed to generate salesperson template: {}", e))?;
+        },
+        _ => return Err("Invalid template type".to_string())
     }
     
     Ok(format!("✅ Template downloaded successfully!\n\n📁 Location: {}\n\n📋 You can now open this file in Excel or any spreadsheet application to fill in your data.", file_path.display()))

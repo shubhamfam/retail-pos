@@ -12,8 +12,10 @@ pub struct ProductImportRow {
     pub description: Option<String>,
     pub base_price: f64,
     pub cost_price: f64,
+    pub barcode: Option<String>,
     pub size: String,
     pub color: String,
+    pub sku: String,
     pub stock_quantity: i32,
     pub price_adjustment: f64,
 }
@@ -92,7 +94,7 @@ impl ImportExportService {
 
         // Export functions
     pub fn export_products_to_csv(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut wtr = Writer::from_path(file_path).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        let mut wtr = Writer::from_path(file_path)?;
         
         let connection = self.connection.lock().unwrap();
         let mut stmt = connection.prepare(
@@ -128,12 +130,12 @@ impl ImportExportService {
             wtr.serialize(row?).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
         }
 
-        wtr.flush().map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        wtr.flush()?;
         Ok(())
     }
 
     pub fn export_customers_to_csv(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut wtr = Writer::from_path(file_path).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        let mut wtr = Writer::from_path(file_path)?;
         
         let connection = self.connection.lock().unwrap();
         let mut stmt = connection.prepare(
@@ -160,12 +162,12 @@ impl ImportExportService {
             wtr.serialize(row?).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
         }
 
-        wtr.flush().map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        wtr.flush()?;
         Ok(())
     }
 
     pub fn export_salespersons_to_csv(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut wtr = Writer::from_path(file_path).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        let mut wtr = Writer::from_path(file_path)?;
         
         let connection = self.connection.lock().unwrap();
         let mut stmt = connection.prepare(
@@ -191,7 +193,7 @@ impl ImportExportService {
             wtr.serialize(salesperson).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
         }
 
-        wtr.flush().map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        wtr.flush()?;
         Ok(())
     }
 
@@ -451,12 +453,16 @@ impl ImportExportService {
             tx.last_insert_rowid() as i32
         };
 
-        // Generate SKU automatically
-        let sku = format!("{}-{}-{}", 
-            row.name.replace(" ", "").to_uppercase(),
-            row.size.to_uppercase(),
-            row.color.to_uppercase()
-        );
+        // Use provided SKU or generate one automatically
+        let sku = if !row.sku.is_empty() {
+            row.sku.clone()
+        } else {
+            format!("{}-{}-{}", 
+                row.name.replace(" ", "").to_uppercase(),
+                row.size.to_uppercase(),
+                row.color.to_uppercase()
+            )
+        };
 
         // Check if variant already exists (by product_id, size, color)
         let existing_variant: Option<i32> = tx.query_row(
@@ -550,7 +556,26 @@ impl ImportExportService {
 
     // Template generation
     pub fn generate_product_template(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut wtr = Writer::from_path(file_path).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        println!("🔧 Starting template generation for path: {}", file_path);
+        
+        // Check if parent directory exists
+        if let Some(parent) = std::path::Path::new(file_path).parent() {
+            println!("📂 Parent directory: {}", parent.display());
+            if !parent.exists() {
+                println!("❌ Parent directory does not exist!");
+                return Err("Parent directory does not exist".into());
+            } else {
+                println!("✅ Parent directory exists");
+            }
+        }
+        
+        println!("📝 Creating CSV writer...");
+        let mut wtr = Writer::from_path(file_path)
+            .map_err(|e| {
+                println!("❌ Failed to create CSV writer: {}", e);
+                e
+            })?;
+        println!("✅ CSV writer created successfully");
         
         // Write header row (each row represents a product variant)
         wtr.serialize(ProductImportRow {
@@ -561,11 +586,13 @@ impl ImportExportService {
             description: Some("Description (optional)".to_string()),
             base_price: 0.0,
             cost_price: 0.0,
+            barcode: Some("Barcode (optional)".to_string()),
             size: "Size".to_string(),
             color: "Color".to_string(),
+            sku: "SKU".to_string(),
             stock_quantity: 0,
             price_adjustment: 0.0,
-        }).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        })?;
 
         // Write example rows showing multiple variants for the same product
         // Note: Multiple rows with the same product name will create variants of that product
@@ -578,8 +605,10 @@ impl ImportExportService {
                 description: Some("Comfortable cotton t-shirt".to_string()),
                 base_price: 500.0,
                 cost_price: 300.0,
+                barcode: Some("1234567890123".to_string()),
                 size: "S".to_string(),
                 color: "Blue".to_string(),
+                sku: "TSHIRT-S-BLUE".to_string(),
                 stock_quantity: 25,
                 price_adjustment: 0.0,
             },
@@ -591,8 +620,10 @@ impl ImportExportService {
                 description: Some("Comfortable cotton t-shirt".to_string()),
                 base_price: 500.0,
                 cost_price: 300.0,
+                barcode: Some("1234567890124".to_string()),
                 size: "M".to_string(),
                 color: "Blue".to_string(),
+                sku: "TSHIRT-M-BLUE".to_string(),
                 stock_quantity: 30,
                 price_adjustment: 0.0,
             },
@@ -604,23 +635,29 @@ impl ImportExportService {
                 description: Some("Comfortable cotton t-shirt".to_string()),
                 base_price: 500.0,
                 cost_price: 300.0,
+                barcode: Some("1234567890125".to_string()),
                 size: "L".to_string(),
                 color: "Red".to_string(),
+                sku: "TSHIRT-L-RED".to_string(),
                 stock_quantity: 20,
                 price_adjustment: 50.0,
             },
         ];
 
-        for example in examples {
-            wtr.serialize(example).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        println!("📊 Writing {} example rows...", examples.len());
+        for (i, example) in examples.iter().enumerate() {
+            println!("✏️ Writing example row {}", i + 1);
+            wtr.serialize(example)?;
         }
 
-        wtr.flush().map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        println!("💾 Flushing CSV writer...");
+        wtr.flush()?;
+        println!("✅ Template generation completed successfully!");
         Ok(())
     }
 
     pub fn generate_customer_template(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut wtr = Writer::from_path(file_path).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        let mut wtr = Writer::from_path(file_path)?;
         
         // Write header row
         wtr.serialize(CustomerImportRow {
@@ -646,12 +683,12 @@ impl ImportExportService {
             notes: Some("VIP Customer".to_string()),
         }).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
 
-        wtr.flush().map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        wtr.flush()?;
         Ok(())
     }
 
     pub fn generate_salesperson_template(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut wtr = Writer::from_path(file_path).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        let mut wtr = Writer::from_path(file_path)?;
         
         // Write header row
         wtr.serialize(SalespersonImportRow {
@@ -684,10 +721,10 @@ impl ImportExportService {
         ];
 
         for example in examples {
-            wtr.serialize(example).map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+            wtr.serialize(example)?;
         }
 
-        wtr.flush().map_err(|e| rusqlite::Error::InvalidParameterName(e.to_string()))?;
+        wtr.flush()?;
         Ok(())
     }
 }

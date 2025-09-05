@@ -506,13 +506,13 @@ const Settings: React.FC<SettingsProps> = ({ setCurrentPage }) => {
       
       switch (importType) {
         case 'products':
-          result = await DatabaseService.generateProductTemplate('');
+          result = await DatabaseService.saveTemplateWithDialog('products');
           break;
         case 'customers':
-          result = await DatabaseService.generateCustomerTemplate('');
+          result = await DatabaseService.saveTemplateWithDialog('customers');
           break;
         case 'salespersons':
-          result = await DatabaseService.generateSalespersonTemplate('');
+          result = await DatabaseService.saveTemplateWithDialog('salespersons');
           break;
         default:
           throw new Error('Invalid template type');
