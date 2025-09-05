@@ -12,9 +12,11 @@ pub struct ProductImportRow {
     pub description: Option<String>,
     pub base_price: f64,
     pub cost_price: f64,
+    #[serde(default)]
     pub barcode: Option<String>,
     pub size: String,
     pub color: String,
+    #[serde(default)]
     pub sku: String,
     pub stock_quantity: i32,
     pub price_adjustment: f64,
