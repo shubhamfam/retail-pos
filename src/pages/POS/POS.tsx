@@ -53,6 +53,19 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
     email: ''
   });
 
+  // Quick add product state
+  const [showQuickAddProduct, setShowQuickAddProduct] = useState(false);
+  const [quickAddProductData, setQuickAddProductData] = useState({
+    name: '',
+    brand: '',
+    category: '',
+    subcategory: '',
+    base_price: 0,
+    cost_price: 0,
+    size: 'One Size',
+    color: 'Default'
+  });
+
   // Salesperson state
   const [salespersons, setSalespersons] = useState<Salesperson[]>([]);
   const [selectedSalesperson, setSelectedSalesperson] = useState<number | null>(null);
@@ -168,6 +181,86 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
     }
   };
 
+  // Quick add product function
+  const handleQuickAddProduct = async () => {
+    try {
+      if (!quickAddProductData.name.trim()) {
+        alert('Product name is required');
+        return;
+      }
+
+      if (quickAddProductData.base_price <= 0) {
+        alert('Price must be greater than 0');
+        return;
+      }
+
+      // Create the product
+      const productId = await DatabaseService.createProduct({
+        name: quickAddProductData.name,
+        brand: quickAddProductData.brand || 'No Brand',
+        category: quickAddProductData.category || 'General',
+        subcategory: quickAddProductData.subcategory || 'General',
+        description: '',
+        base_price: quickAddProductData.base_price,
+        cost_price: quickAddProductData.cost_price || quickAddProductData.base_price * 0.6, // Default 40% margin
+        barcode: null
+      });
+
+      // Create a variant for the product with specified size and color
+      const sku = `${quickAddProductData.name.replace(/\s+/g, '').toUpperCase()}-${quickAddProductData.size.replace(/\s+/g, '').toUpperCase()}-${quickAddProductData.color.replace(/\s+/g, '').toUpperCase()}`;
+      const variantId = await DatabaseService.createProductVariant({
+        product_id: productId,
+        size: quickAddProductData.size,
+        color: quickAddProductData.color,
+        sku: sku,
+        stock_quantity: 1, // Start with 1 unit
+        price_adjustment: 0
+      });
+
+      // Create the new product object
+      const newProduct: Product = {
+        id: productId,
+        name: quickAddProductData.name,
+        brand: quickAddProductData.brand || 'No Brand',
+        category: quickAddProductData.category || 'General',
+        subcategory: quickAddProductData.subcategory || 'General',
+        description: '',
+        base_price: quickAddProductData.base_price,
+        cost_price: quickAddProductData.cost_price || quickAddProductData.base_price * 0.6,
+        barcode: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // Add to products list
+      setProducts([...products, newProduct]);
+      
+      // Add the product to cart immediately
+      addToCart(newProduct);
+      
+      // Close modal and reset form
+      setShowQuickAddProduct(false);
+      setQuickAddProductData({
+        name: '',
+        brand: '',
+        category: '',
+        subcategory: '',
+        base_price: 0,
+        cost_price: 0,
+        size: 'One Size',
+        color: 'Default'
+      });
+
+      // Clear search to show the new product
+      setSearchQuery('');
+
+      alert('Product created and added to cart successfully!');
+    } catch (error) {
+      console.error('Error adding product:', error);
+      alert('Error adding product: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  };
+
   // Keyboard shortcuts
   useKeyboardShortcuts({
     shortcuts: [
@@ -184,6 +277,9 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
         }
         if (showBarcodeScanner) {
           setShowBarcodeScanner(false);
+        }
+        if (showQuickAddProduct) {
+          setShowQuickAddProduct(false);
         }
       }),
       ...createPOSShortcuts(() => {
@@ -264,17 +360,12 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
             const unitPrice = variant ? product.base_price + variant.price_adjustment : product.base_price;
     
     if (existingItem) {
-      // Check if adding more would exceed stock
-      if (variant && existingItem.quantity >= variant.stock_quantity) {
-        alert(`Sorry, only ${variant.stock_quantity} units available for ${product.name} - ${variant.size} ${variant.color}!`);
-        return;
-      }
-      
-      setCart(cart.map(item =>
-        item.product.id === product.id && (!variant || item.variant?.id === variant.id)
-          ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.unitPrice }
-          : item
-      ));
+      // Product already exists in cart, don't add again - just show a message
+      const displayName = variant 
+        ? `${product.name} - ${variant.size} ${variant.color}` 
+        : product.name;
+      alert(`${displayName} is already in the cart. Use the quantity controls in the cart to adjust the amount.`);
+      return;
     } else {
       const newItem: CartItem = {
         product,
@@ -311,6 +402,7 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
         !(item.product.id === productId && (!variantId || item.variant?.id === variantId))
       ));
     } else {
+      // Update quantity (validation is now handled in the input onChange)
       setCart(cart.map(item =>
         item.product.id === productId && (!variantId || item.variant?.id === variantId)
           ? { ...item, quantity, total: quantity * item.unitPrice }
@@ -550,22 +642,47 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
         <div className="mb-6">
           {/* Product Search */}
           <div className="mb-6">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  ✕
-                </button>
-              )}
+            <div className="flex space-x-3">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              
+              {/* Permanent Quick Add Product Button */}
+              <button
+                onClick={() => {
+                  // Reset form data for new product
+                  setQuickAddProductData({
+                    name: '',
+                    brand: '',
+                    category: '',
+                    subcategory: '',
+                    size: '',
+                    color: '',
+                    price: '',
+                    stock: ''
+                  });
+                  setShowQuickAddProduct(true);
+                }}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium whitespace-nowrap flex items-center space-x-2"
+                title="Add a new product to the inventory"
+              >
+                <span className="text-lg">+</span>
+                <span>Quick Add Product</span>
+              </button>
             </div>
           </div>
           
@@ -879,9 +996,42 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
           })}
         </div>
 
-        {filteredProducts.length === 0 && (
+        {filteredProducts.length === 0 && searchQuery.trim() !== '' && (
+          <div className="text-center py-8">
+            <div className="text-gray-500 mb-4">
+              No products found matching "{searchQuery}".
+            </div>
+            <button
+              onClick={() => {
+                // Pre-fill the product name with the search query
+                // If search query contains multiple words, try to split name and brand
+                const words = searchQuery.trim().split(' ');
+                let productName = searchQuery;
+                let brandName = '';
+                
+                if (words.length >= 2) {
+                  // Assume last word might be brand, rest is product name
+                  brandName = words[words.length - 1];
+                  productName = words.slice(0, -1).join(' ');
+                }
+                
+                setQuickAddProductData({
+                  ...quickAddProductData,
+                  name: productName,
+                  brand: brandName
+                });
+                setShowQuickAddProduct(true);
+              }}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            >
+              + Create "{searchQuery}" as New Product
+            </button>
+          </div>
+        )}
+
+        {filteredProducts.length === 0 && searchQuery.trim() === '' && (
           <div className="text-center py-8 text-gray-500">
-            No products found matching your search.
+            Start typing to search products...
           </div>
         )}
       </div>
@@ -930,14 +1080,129 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
                   
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-2 flex-1 min-w-0">
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => updateQuantity(item.product.id, Number(e.target.value), item.variant?.id)}
-                        className="w-16 px-2 py-1 border border-gray-300 rounded-md text-center text-sm"
-                        style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
-                      />
+                      {/* Quantity controls with arrows */}
+                      <div className="flex items-center border border-gray-300 rounded-md">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newQuantity = Math.max(1, item.quantity - 1);
+                            updateQuantity(item.product.id, newQuantity, item.variant?.id);
+                          }}
+                          className="px-2 py-1 text-gray-600 hover:text-gray-800 hover:bg-gray-100 text-sm font-bold"
+                          title="Decrease quantity"
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          min="1"
+                          max={(() => {
+                            if (item.variant && item.variant.stock_quantity !== undefined) {
+                              return item.variant.stock_quantity;
+                            } else if (productVariants[item.product.id]) {
+                              const variants = productVariants[item.product.id];
+                              if (variants.length > 0) {
+                                return variants.reduce((sum, v) => sum + v.stock_quantity, 0);
+                              }
+                            }
+                            return 999;
+                          })()}
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const newQuantity = parseInt(e.target.value) || 0;
+                            
+                            // Debug: Log the variant data
+                            console.log('Cart item variant:', item.variant);
+                            console.log('Product variants from state:', productVariants[item.product.id]);
+                            
+                            // Try to get stock from variant or from productVariants state
+                            let maxStock = 999; // default fallback
+                            
+                            if (item.variant && item.variant.stock_quantity !== undefined) {
+                              maxStock = item.variant.stock_quantity;
+                            } else if (productVariants[item.product.id]) {
+                              // If item doesn't have variant, try to get from productVariants state
+                              const variants = productVariants[item.product.id];
+                              if (variants.length > 0) {
+                                // Sum all variant stock or use first variant
+                                maxStock = variants.reduce((sum, v) => sum + v.stock_quantity, 0);
+                                console.log('Using stock from productVariants:', maxStock);
+                              }
+                            }
+                            
+                            console.log('Final maxStock:', maxStock);
+                            
+                            // If empty input, don't update (let them type)
+                            if (e.target.value === '') {
+                              return;
+                            }
+                            
+                            // Clamp the value between 1 and maxStock
+                            const clampedQuantity = Math.max(1, Math.min(newQuantity, maxStock));
+                            
+                            // If user tried to enter more than max, show alert
+                            if (newQuantity > maxStock) {
+                              alert(`Sorry, only ${maxStock} units available for ${item.product.name}${item.variant ? ` - ${item.variant.size} ${item.variant.color}` : ''}!`);
+                            }
+                            
+                            // Always update with the clamped value
+                            updateQuantity(item.product.id, clampedQuantity, item.variant?.id);
+                          }}
+                          onBlur={(e) => {
+                            const currentValue = parseInt(e.target.value) || 0;
+                            
+                            // Use same logic to get max stock
+                            let maxStock = 999;
+                            if (item.variant && item.variant.stock_quantity !== undefined) {
+                              maxStock = item.variant.stock_quantity;
+                            } else if (productVariants[item.product.id]) {
+                              const variants = productVariants[item.product.id];
+                              if (variants.length > 0) {
+                                maxStock = variants.reduce((sum, v) => sum + v.stock_quantity, 0);
+                              }
+                            }
+                            
+                            // Ensure we always have a valid value on blur
+                            if (currentValue < 1) {
+                              updateQuantity(item.product.id, 1, item.variant?.id);
+                            } else if (currentValue > maxStock) {
+                              updateQuantity(item.product.id, maxStock, item.variant?.id);
+                            }
+                          }}
+                          className="w-12 px-1 py-1 text-center text-sm border-0 focus:ring-0 focus:outline-none"
+                          style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+                          title={item.variant ? `Maximum available: ${item.variant.stock_quantity}` : ''}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Get max stock using same logic
+                            let maxStock = 999;
+                            if (item.variant && item.variant.stock_quantity !== undefined) {
+                              maxStock = item.variant.stock_quantity;
+                            } else if (productVariants[item.product.id]) {
+                              const variants = productVariants[item.product.id];
+                              if (variants.length > 0) {
+                                maxStock = variants.reduce((sum, v) => sum + v.stock_quantity, 0);
+                              }
+                            }
+                            
+                            const newQuantity = Math.min(maxStock, item.quantity + 1);
+                            
+                            // Show alert if trying to exceed stock
+                            if (item.quantity + 1 > maxStock) {
+                              alert(`Sorry, only ${maxStock} units available for ${item.product.name}${item.variant ? ` - ${item.variant.size} ${item.variant.color}` : ''}!`);
+                              return;
+                            }
+                            
+                            updateQuantity(item.product.id, newQuantity, item.variant?.id);
+                          }}
+                          className="px-2 py-1 text-gray-600 hover:text-gray-800 hover:bg-gray-100 text-sm font-bold"
+                          title="Increase quantity"
+                        >
+                          +
+                        </button>
+                      </div>
                       <span className="text-sm text-gray-600">x</span>
                       <div className="flex items-center space-x-1 min-w-0 flex-1">
                         <input
@@ -1411,6 +1676,174 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
                 className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-md"
               >
                 Add Customer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Product Modal */}
+      {showQuickAddProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-screen overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Add Product</h3>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Product Name *
+              </label>
+              <input
+                type="text"
+                value={quickAddProductData.name}
+                onChange={(e) => setQuickAddProductData({ ...quickAddProductData, name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter product name"
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Brand (optional)
+              </label>
+              <input
+                type="text"
+                value={quickAddProductData.brand}
+                onChange={(e) => setQuickAddProductData({ ...quickAddProductData, brand: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter brand name or leave empty"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Category
+                </label>
+                <input
+                  type="text"
+                  value={quickAddProductData.category}
+                  onChange={(e) => setQuickAddProductData({ ...quickAddProductData, category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g. Clothing"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Subcategory
+                </label>
+                <input
+                  type="text"
+                  value={quickAddProductData.subcategory}
+                  onChange={(e) => setQuickAddProductData({ ...quickAddProductData, subcategory: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g. Shirts"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Size
+                </label>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={quickAddProductData.size}
+                    onChange={(e) => setQuickAddProductData({ ...quickAddProductData, size: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. M, L, XL, One Size"
+                  />
+                  <div className="flex flex-wrap gap-1">
+                    {['XS', 'S', 'M', 'L', 'XL', 'XXL', 'One Size', 'Free Size'].map((size) => (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => setQuickAddProductData({ ...quickAddProductData, size })}
+                        className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                      >
+                        {size}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Color
+                </label>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={quickAddProductData.color}
+                    onChange={(e) => setQuickAddProductData({ ...quickAddProductData, color: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. Red, Blue, Black"
+                  />
+                  <div className="flex flex-wrap gap-1">
+                    {['Black', 'White', 'Red', 'Blue', 'Green', 'Yellow', 'Gray', 'Brown', 'Pink', 'Purple', 'Orange', 'Default'].map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setQuickAddProductData({ ...quickAddProductData, color })}
+                        className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                      >
+                        {color}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Selling Price * (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={quickAddProductData.base_price}
+                  onChange={(e) => setQuickAddProductData({ ...quickAddProductData, base_price: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Cost Price (₹)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={quickAddProductData.cost_price}
+                  onChange={(e) => setQuickAddProductData({ ...quickAddProductData, cost_price: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  placeholder="Auto-calculated if empty"
+                />
+              </div>
+            </div>
+            
+            
+            <div className="text-xs text-gray-500 mb-4">
+              * The product will be created with the specified size and color variant and 1 unit in stock.
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowQuickAddProduct(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleQuickAddProduct}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-md"
+              >
+                Create & Add to Cart
               </button>
             </div>
           </div>
