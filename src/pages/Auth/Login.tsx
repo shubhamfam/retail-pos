@@ -54,7 +54,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="flex justify-center mb-6">
-            <img src="/src/assets/logo.svg" alt="POSLY" className="w-32 h-32" />
+            <img src="/posly-icon.svg" alt="POSLY" className="w-32 h-32" />
           </div>
           <p className="text-center text-sm text-gray-600">
             Sign in to your account

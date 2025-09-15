@@ -38,6 +38,26 @@ const Settings: React.FC<SettingsProps> = ({ setCurrentPage }) => {
   });
   const [loading, setLoading] = useState(false);
 
+  // Load store settings from database
+  const loadStoreSettings = async () => {
+    try {
+      const settings = await DatabaseService.getAllSettings();
+      const settingsMap = new Map(settings.map(s => [s.key, s.value]));
+      
+      setStoreSettings({
+        name: settingsMap.get('store_name') || 'posly',
+        address: settingsMap.get('store_address') || '123 Main Street, City, State 12345',
+        phone: settingsMap.get('store_phone') || '+91 98765 43210',
+        email: settingsMap.get('store_email') || 'info@clothesshop.com',
+        gstNumber: settingsMap.get('store_gst_number') || 'GST123456789',
+        taxRate: parseInt(settingsMap.get('tax_rate') || '12'),
+        currency: settingsMap.get('currency') || 'INR'
+      });
+    } catch (error) {
+      console.error('Error loading store settings:', error);
+    }
+  };
+
   // Categories state
   const [categories, setCategories] = useState<Category[]>([]);
   const [showAddCategory, setShowAddCategory] = useState(false);
@@ -87,6 +107,7 @@ const Settings: React.FC<SettingsProps> = ({ setCurrentPage }) => {
 
   // Load settings on component mount
   useEffect(() => {
+    loadStoreSettings();
     loadSettings();
     loadCategories();
     loadBrands();
@@ -281,10 +302,29 @@ const Settings: React.FC<SettingsProps> = ({ setCurrentPage }) => {
     }
   };
 
-  const saveStoreSettings = () => {
-    // In a real app, this would save to database
-    console.log('Saving store settings:', storeSettings);
-    alert('Store settings saved successfully!');
+  const saveStoreSettings = async () => {
+    try {
+      setLoading(true);
+      
+      // Save all store settings to database
+      await Promise.all([
+        DatabaseService.setSetting('store_name', storeSettings.name, 'Store name'),
+        DatabaseService.setSetting('store_address', storeSettings.address, 'Store address'),
+        DatabaseService.setSetting('store_phone', storeSettings.phone, 'Store phone number'),
+        DatabaseService.setSetting('store_email', storeSettings.email, 'Store email address'),
+        DatabaseService.setSetting('store_gst_number', storeSettings.gstNumber, 'Store GST number'),
+        DatabaseService.setSetting('tax_rate', storeSettings.taxRate.toString(), 'Tax rate percentage'),
+        DatabaseService.setSetting('currency', storeSettings.currency, 'Store currency')
+      ]);
+      
+      console.log('Store settings saved successfully:', storeSettings);
+      alert('Store settings saved successfully!');
+    } catch (error) {
+      console.error('Error saving store settings:', error);
+      alert('Error saving store settings. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const saveSystemSettings = async () => {
@@ -478,6 +518,9 @@ const Settings: React.FC<SettingsProps> = ({ setCurrentPage }) => {
           break;
         case 'customers':
           result = await DatabaseService.exportCustomersToCSV('');
+          break;
+        case 'salespersons':
+          result = await DatabaseService.exportSalespersonsToCSV('');
           break;
         default:
           throw new Error('Invalid export type');

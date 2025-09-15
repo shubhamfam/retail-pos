@@ -75,6 +75,7 @@ fn main() {
             get_all_settings,
             export_products_to_csv,
             export_customers_to_csv,
+            export_salespersons_to_csv,
             import_products_from_csv,
             import_customers_from_csv,
             import_products_from_csv_content,
@@ -648,10 +649,45 @@ async fn export_products_to_csv(app_handle: AppHandle, file_path: String) -> Res
     let db = app_handle.state::<Database>();
     let import_export_service = ImportExportService::new(db.connection.clone());
     
-    import_export_service.export_products_to_csv(&file_path)
+    // If file_path is empty, use automatic directory selection like templates
+    let final_file_path = if file_path.is_empty() {
+        // Try multiple directory options in order of preference
+        let target_dir = if let Some(docs) = dirs::document_dir() {
+            println!("📁 Using Documents directory for export: {}", docs.display());
+            docs
+        } else if let Ok(current) = std::env::current_dir() {
+            println!("📁 Using current directory for export: {}", current.display());
+            current
+        } else if let Some(home) = dirs::home_dir() {
+            println!("📁 Using home directory for export: {}", home.display());
+            home
+        } else {
+            println!("📁 Using temp directory for export");
+            std::env::temp_dir()
+        };
+        
+        // Ensure the target directory exists
+        if !target_dir.exists() {
+            println!("📂 Creating directory for export: {}", target_dir.display());
+            std::fs::create_dir_all(&target_dir)
+                .map_err(|e| format!("Failed to create directory {}: {}", target_dir.display(), e))?;
+        }
+        
+        // Create the file path with timestamp
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let file_path = target_dir.join(format!("products_export_{}.csv", timestamp));
+        
+        file_path.to_str()
+            .ok_or_else(|| "Failed to convert file path to string".to_string())?
+            .to_string()
+    } else {
+        file_path
+    };
+    
+    import_export_service.export_products_to_csv(&final_file_path)
         .map_err(|e| e.to_string())?;
     
-    Ok(format!("Products exported successfully to {}", file_path))
+    Ok(format!("Products exported successfully to {}", final_file_path))
 }
 
 #[tauri::command]
@@ -659,10 +695,91 @@ async fn export_customers_to_csv(app_handle: AppHandle, file_path: String) -> Re
     let db = app_handle.state::<Database>();
     let import_export_service = ImportExportService::new(db.connection.clone());
     
-    import_export_service.export_customers_to_csv(&file_path)
+    // If file_path is empty, use automatic directory selection like templates
+    let final_file_path = if file_path.is_empty() {
+        // Try multiple directory options in order of preference
+        let target_dir = if let Some(docs) = dirs::document_dir() {
+            println!("📁 Using Documents directory for export: {}", docs.display());
+            docs
+        } else if let Ok(current) = std::env::current_dir() {
+            println!("📁 Using current directory for export: {}", current.display());
+            current
+        } else if let Some(home) = dirs::home_dir() {
+            println!("📁 Using home directory for export: {}", home.display());
+            home
+        } else {
+            println!("📁 Using temp directory for export");
+            std::env::temp_dir()
+        };
+        
+        // Ensure the target directory exists
+        if !target_dir.exists() {
+            println!("📂 Creating directory for export: {}", target_dir.display());
+            std::fs::create_dir_all(&target_dir)
+                .map_err(|e| format!("Failed to create directory {}: {}", target_dir.display(), e))?;
+        }
+        
+        // Create the file path with timestamp
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let file_path = target_dir.join(format!("customers_export_{}.csv", timestamp));
+        
+        file_path.to_str()
+            .ok_or_else(|| "Failed to convert file path to string".to_string())?
+            .to_string()
+    } else {
+        file_path
+    };
+    
+    import_export_service.export_customers_to_csv(&final_file_path)
         .map_err(|e| e.to_string())?;
     
-    Ok(format!("Customers exported successfully to {}", file_path))
+    Ok(format!("Customers exported successfully to {}", final_file_path))
+}
+
+#[tauri::command]
+async fn export_salespersons_to_csv(app_handle: AppHandle, file_path: String) -> Result<String, String> {
+    let db = app_handle.state::<Database>();
+    let import_export_service = ImportExportService::new(db.connection.clone());
+    
+    // If file_path is empty, use automatic directory selection like templates
+    let final_file_path = if file_path.is_empty() {
+        // Try multiple directory options in order of preference
+        let target_dir = if let Some(docs) = dirs::document_dir() {
+            println!("📁 Using Documents directory for export: {}", docs.display());
+            docs
+        } else if let Ok(current) = std::env::current_dir() {
+            println!("📁 Using current directory for export: {}", current.display());
+            current
+        } else if let Some(home) = dirs::home_dir() {
+            println!("📁 Using home directory for export: {}", home.display());
+            home
+        } else {
+            println!("📁 Using temp directory for export");
+            std::env::temp_dir()
+        };
+        
+        // Ensure the target directory exists
+        if !target_dir.exists() {
+            println!("📂 Creating directory for export: {}", target_dir.display());
+            std::fs::create_dir_all(&target_dir)
+                .map_err(|e| format!("Failed to create directory {}: {}", target_dir.display(), e))?;
+        }
+        
+        // Create the file path with timestamp
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let file_path = target_dir.join(format!("salespersons_export_{}.csv", timestamp));
+        
+        file_path.to_str()
+            .ok_or_else(|| "Failed to convert file path to string".to_string())?
+            .to_string()
+    } else {
+        file_path
+    };
+    
+    import_export_service.export_salespersons_to_csv(&final_file_path)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(format!("Salespersons exported successfully to {}", final_file_path))
 }
 
 #[tauri::command]
@@ -1276,6 +1393,7 @@ async fn create_settings_table(app_handle: AppHandle) -> Result<String, String> 
         Err(e) => Err(format!("Error creating settings table: {}", e))
     }
 }
+
 
 
 

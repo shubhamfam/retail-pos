@@ -198,6 +198,16 @@ export class DatabaseService {
     }
   }
 
+  static async getAllSales(): Promise<Sale[]> {
+    try {
+      // Use a very high limit to get all sales
+      return await invoke('get_recent_sales', { limit: 10000 });
+    } catch (error) {
+      console.error('Error fetching all sales:', error);
+      return [];
+    }
+  }
+
   static async getTodaySales(): Promise<Sale[]> {
     try {
       return await invoke('get_today_sales');
@@ -507,13 +517,13 @@ export class DatabaseService {
 
   static async getAllSettings(): Promise<Array<{key: string, value: string, description?: string}>> {
     try {
-      console.log('Getting all settings...');
-      const result = await invoke('get_all_settings');
-      console.log('All settings retrieved successfully:', result);
-      return result as Array<{key: string, value: string, description?: string}>;
+      console.log('Getting all settings');
+      const settings = await invoke('get_all_settings');
+      console.log('Retrieved settings:', settings);
+      return settings as Array<{key: string, value: string, description?: string}>;
     } catch (error) {
       console.error('Error getting all settings:', error);
-      throw new Error(`Failed to get all settings: ${error}`);
+      throw new Error(`Failed to get settings: ${error}`);
     }
   }
 
@@ -539,6 +549,18 @@ export class DatabaseService {
     } catch (error) {
       console.error('Error exporting customers:', error);
       throw new Error(`Failed to export customers: ${error}`);
+    }
+  }
+
+  static async exportSalespersonsToCSV(filePath: string): Promise<string> {
+    try {
+      console.log('Exporting salespersons to CSV:', filePath);
+      const result = await invoke('export_salespersons_to_csv', { filePath });
+      console.log('Salespersons exported successfully');
+      return result as string;
+    } catch (error) {
+      console.error('Error exporting salespersons:', error);
+      throw new Error(`Failed to export salespersons: ${error}`);
     }
   }
 
