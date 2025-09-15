@@ -16,18 +16,15 @@
     "@tauri-apps/api": "^2.7.0",
     "@tauri-apps/plugin-opener": "^2",
     "@types/react-router-dom": "^5.3.3",
-    "better-sqlite3": "^12.2.0",
     "lucide-react": "^0.536.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-redux": "^9.2.0",
     "react-router-dom": "^7.7.1",
-    "sqlite3": "^5.1.7",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@types/xlsx": "^0.0.35",
