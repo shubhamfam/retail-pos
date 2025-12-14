@@ -301,14 +301,42 @@ async fn create_sale(
              customer_id, user_id, salesperson_id, total_amount, tax_amount, discount_amount, payment_method, status, items.len());
     
     let db = app_handle.state::<Database>();
-    let conn = db.connection.lock().unwrap();
+    let mut conn = db.connection.lock().unwrap();
     println!("Database connection acquired");
     
+    // Start transaction for atomic operation
+    let tx = conn.transaction().map_err(|e| {
+        println!("Error starting transaction: {}", e);
+        e.to_string()
+    })?;
+    
+    // Validate stock availability FIRST
+    println!("Validating stock for {} sale items...", items.len());
+    for item in items.iter() {
+        let current_stock: i32 = tx.query_row(
+            "SELECT stock_quantity FROM product_variants WHERE id = ?",
+            [item.product_variant_id],
+            |row| row.get(0)
+        ).map_err(|e| {
+            println!("Error checking stock for variant {}: {}", item.product_variant_id, e);
+            format!("Product variant {} not found", item.product_variant_id)
+        })?;
+        
+        if current_stock < item.quantity {
+            return Err(format!(
+                "Insufficient stock for product variant {}. Available: {}, Requested: {}", 
+                item.product_variant_id, current_stock, item.quantity
+            ));
+        }
+        println!("Stock validation passed for variant {}: {} available, {} requested", 
+                 item.product_variant_id, current_stock, item.quantity);
+    }
+
     // Create the sale using SaleService
     let sale_service = SaleService::new(db.connection.clone());
     println!("About to create sale...");
     let sale = sale_service.create_sale(
-        &conn,
+        &tx,
         customer_id,
         user_id,
         salesperson_id,
@@ -338,12 +366,29 @@ async fn create_sale(
             discount: 0.0, // Default discount
             total: item.total,
         };
-        sale_service.create_sale_item(&conn, &sale_item).map_err(|e| {
+        sale_service.create_sale_item(&tx, &sale_item).map_err(|e| {
             println!("Error creating sale item {}: {}", i+1, e);
             e.to_string()
         })?;
         println!("Sale item {} created successfully", i+1);
+        
+        // Decrement stock quantity
+        println!("Decrementing stock for product variant {} by {} units", item.product_variant_id, item.quantity);
+        tx.execute(
+            "UPDATE product_variants SET stock_quantity = stock_quantity - ? WHERE id = ?",
+            [item.quantity, item.product_variant_id]
+        ).map_err(|e| {
+            println!("Error updating stock for variant {}: {}", item.product_variant_id, e);
+            e.to_string()
+        })?;
+        println!("Stock decremented successfully for variant {}", item.product_variant_id);
     }
+
+    // Commit the transaction
+    tx.commit().map_err(|e| {
+        println!("Error committing transaction: {}", e);
+        e.to_string()
+    })?;
 
     println!("=== Backend create_sale END ===");
     Ok(sale)
@@ -1410,7 +1455,7 @@ async fn create_sample_data(app_handle: AppHandle) -> Result<String, String> {
                 name: "Cotton T-Shirt".to_string(),
                 brand: "Fashion Brand".to_string(),
                 category: "Clothing".to_string(),
-                subcategory: Some("T-Shirts".to_string()),
+                subcategory: "T-Shirts".to_string(),
                 description: Some("Comfortable cotton t-shirt".to_string()),
                 base_price: 500.0,
                 cost_price: 300.0,
@@ -1432,7 +1477,7 @@ async fn create_sample_data(app_handle: AppHandle) -> Result<String, String> {
                 name: "Denim Jeans".to_string(),
                 brand: "Denim Co".to_string(),
                 category: "Clothing".to_string(),
-                subcategory: Some("Jeans".to_string()),
+                subcategory: "Jeans".to_string(),
                 description: Some("Classic denim jeans".to_string()),
                 base_price: 1200.0,
                 cost_price: 800.0,
@@ -1454,7 +1499,7 @@ async fn create_sample_data(app_handle: AppHandle) -> Result<String, String> {
                 name: "Casual Shirt".to_string(),
                 brand: "Shirt Co".to_string(),
                 category: "Clothing".to_string(),
-                subcategory: Some("Shirts".to_string()),
+                subcategory: "Shirts".to_string(),
                 description: Some("Casual cotton shirt".to_string()),
                 base_price: 800.0,
                 cost_price: 500.0,
@@ -1516,18 +1561,8 @@ async fn create_sample_data(app_handle: AppHandle) -> Result<String, String> {
             println!("Default user already exists");
         },
         Err(_) => {
-            // Create default user
-            let default_user = User {
-                id: None,
-                username: "admin".to_string(),
-                password_hash: "admin123".to_string(), // In real app, this should be hashed
-                role: "admin".to_string(),
-                name: "Administrator".to_string(),
-                created_at: None,
-                last_login: None,
-            };
-            
-            match user_service.create_user(&default_user) {
+            // Create default user using the existing method
+            match user_service.create_default_user() {
                 Ok(user_id) => {
                     println!("Created default user with ID: {}", user_id);
                 },

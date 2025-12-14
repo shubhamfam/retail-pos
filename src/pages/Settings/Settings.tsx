@@ -37,6 +37,7 @@ const Settings: React.FC<SettingsProps> = ({ setCurrentPage }) => {
     autoPrintReceipts: false
   });
   const [loading, setLoading] = useState(false);
+  const [sampleDataLoading, setSampleDataLoading] = useState(false);
 
   // Load store settings from database
   const loadStoreSettings = async () => {
@@ -577,6 +578,19 @@ const Settings: React.FC<SettingsProps> = ({ setCurrentPage }) => {
     }
   };
 
+  const handleCreateSampleData = async () => {
+    setSampleDataLoading(true);
+    try {
+      const result = await invoke<string>('create_sample_data');
+      alert(`Sample data created successfully!\n\n${result}`);
+    } catch (error) {
+      console.error('Error creating sample data:', error);
+      alert(`Error creating sample data: ${error}`);
+    } finally {
+      setSampleDataLoading(false);
+    }
+  };
+
   return (
     <div className="p-6">
       <h1 className="text-3xl font-bold text-gray-800 mb-6">Settings</h1>
@@ -861,6 +875,36 @@ const Settings: React.FC<SettingsProps> = ({ setCurrentPage }) => {
               </label>
             </div>
           </div>
+
+              {/* Sample Data Section */}
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-medium text-gray-800 mb-4">Development Tools</h3>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h4 className="text-sm font-medium text-yellow-800">
+                        Create Sample Data
+                      </h4>
+                      <p className="mt-1 text-sm text-yellow-700">
+                        This will create sample products, variants, and a default user for testing purposes. 
+                        Use this if you're starting with an empty database.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCreateSampleData}
+                  disabled={sampleDataLoading}
+                  className="bg-green-500 text-white px-6 py-2 rounded-md hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {sampleDataLoading ? 'Creating Sample Data...' : 'Create Sample Data'}
+                </button>
+              </div>
 
               {/* Save Button */}
               <div className="pt-4">

@@ -96,6 +96,38 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
     }
   };
 
+  // Function to refresh product data and variants
+  const refreshProductData = async () => {
+    try {
+      console.log('Refreshing product data...');
+      const productsData = await DatabaseService.getProducts();
+      setProducts(productsData);
+      
+      // Refresh product variants for all products
+      const variantPromises = productsData.map(async (product) => {
+        try {
+          const variants = await DatabaseService.getProductVariants(product.id);
+          return { productId: product.id, variants };
+        } catch (error) {
+          console.error(`Error loading variants for product ${product.id}:`, error);
+          return { productId: product.id, variants: [] };
+        }
+      });
+      
+      const variantResults = await Promise.all(variantPromises);
+      const newProductVariants: { [productId: number]: ProductVariant[] } = {};
+      
+      variantResults.forEach(({ productId, variants }) => {
+        newProductVariants[productId] = variants;
+      });
+      
+      setProductVariants(newProductVariants);
+      console.log('Product data refreshed successfully');
+    } catch (error) {
+      console.error('Error refreshing product data:', error);
+    }
+  };
+
   // Salesperson state
   const [salespersons, setSalespersons] = useState<Salesperson[]>([]);
   const [selectedSalesperson, setSelectedSalesperson] = useState<number | null>(null);
