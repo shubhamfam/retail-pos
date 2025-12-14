@@ -7,13 +7,13 @@ export class ReceiptSettingsService {
   // Default receipt settings
   static getDefaultSettings(): ReceiptSettings {
     return {
-      storeName: 'Clothes Shop POS',
+      storeName: 'Posly',
       storeAddress: '123 Main Street, City, State 12345',
       storePhone: '+91 98765 43210',
       storeEmail: 'info@clothesshop.com',
       storeGST: 'GST123456789',
       customFooter: 'Thank you for shopping!\nPlease visit again!',
-      taxDisplay: 'exclusive',
+      taxDisplay: 'inclusive',
       currencySymbol: '₹',
       currencyCode: 'INR',
       printHeader: true,
@@ -66,13 +66,43 @@ export class ReceiptSettingsService {
   static loadTemplates(): ReceiptTemplate[] {
     try {
       const saved = localStorage.getItem(this.TEMPLATES_KEY);
+      console.log('Raw saved templates:', saved);
+      
       if (saved) {
-        return JSON.parse(saved);
+        const templates: ReceiptTemplate[] = JSON.parse(saved);
+        console.log('Parsed templates before migration:', templates);
+        
+        // Migrate existing templates to ensure they have the correct defaults
+        const migratedTemplates = templates.map(template => ({
+          ...template,
+          settings: {
+            ...this.getDefaultSettings(),
+            ...template.settings,
+            // Force these critical settings to be correct
+            showTaxBreakdown: true,
+            taxDisplay: 'inclusive' as 'inclusive' | 'exclusive'
+          }
+        }));
+        
+        console.log('Migrated templates:', migratedTemplates);
+        
+        // Save the migrated templates back
+        this.saveTemplates(migratedTemplates);
+        return migratedTemplates;
       }
     } catch (error) {
       console.error('Error loading receipt templates:', error);
     }
+    
+    console.log('No saved templates, returning default');
     return [this.getDefaultTemplate()];
+  }
+
+  // Force reset templates to default (for debugging)
+  static resetToDefaults(): void {
+    console.log('Resetting receipt templates to defaults');
+    localStorage.removeItem(this.TEMPLATES_KEY);
+    localStorage.removeItem(this.STORAGE_KEY);
   }
 
   // Get default template
@@ -239,5 +269,12 @@ export class ReceiptSettingsService {
     }
     
     return null;
+  }
+
+  // One-time cleanup: Clear all templates and keep only default template
+  static oneTimeCleanup(): void {
+    const defaultTemplate = this.getDefaultTemplate();
+    this.saveTemplates([defaultTemplate]);
+    console.log('One-time cleanup: Reset to default template only');
   }
 } 

@@ -23,16 +23,25 @@ const Sales: React.FC<SalesProps> = ({ setCurrentPage }) => {
   const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
   const [showBill, setShowBill] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
+  
+  // Pagination state
+  const [currentPageNum, setCurrentPageNum] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5); // Start with 5 to show pagination
 
   useEffect(() => {
     loadSales();
     loadCustomers();
   }, [selectedPeriod]);
 
+  // Reset to first page when search query or period changes
+  useEffect(() => {
+    setCurrentPageNum(1);
+  }, [searchQuery, selectedPeriod]);
+
   const loadSales = async () => {
     try {
       setLoading(true);
-      const recentSales = await DatabaseService.getRecentSales();
+      const recentSales = await DatabaseService.getAllSales(); // Get all sales
       
       // Add customer details and item count to sales
       const salesWithDetails = recentSales.map(sale => ({
@@ -103,6 +112,16 @@ const Sales: React.FC<SalesProps> = ({ setCurrentPage }) => {
     }
   });
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredSales.length / itemsPerPage);
+  const startIndex = (currentPageNum - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentSales = filteredSales.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPageNum(page);
+  };
+
   const handleViewDetails = (sale: SalesWithDetails) => {
     setSelectedSale(sale);
     setShowSaleDetails(true);
@@ -150,7 +169,7 @@ const Sales: React.FC<SalesProps> = ({ setCurrentPage }) => {
           total: item.total,
         })),
         storeInfo: {
-          name: "Clothes Shop",
+          name: "Posly",
           address: "123 Main Street, Mumbai, Maharashtra",
           phone: "+91 98765 43210",
           email: "info@clothesshop.com",
@@ -288,9 +307,16 @@ const Sales: React.FC<SalesProps> = ({ setCurrentPage }) => {
       {/* Sales Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-800">
-            Sales Transactions ({filteredSales.length})
-          </h3>
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-gray-800">
+              Sales Transactions ({filteredSales.length})
+            </h3>
+            {totalPages > 1 && (
+              <div className="text-sm text-gray-600">
+                Showing {startIndex + 1}-{Math.min(endIndex, filteredSales.length)} of {filteredSales.length}
+              </div>
+            )}
+          </div>
         </div>
         
         {loading ? (
@@ -328,7 +354,7 @@ const Sales: React.FC<SalesProps> = ({ setCurrentPage }) => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredSales.map((sale) => (
+                {currentSales.map((sale) => (
                   <tr key={sale.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       #{sale.id}
@@ -365,6 +391,90 @@ const Sales: React.FC<SalesProps> = ({ setCurrentPage }) => {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        
+        {/* Pagination */}
+        {!loading && filteredSales.length > 0 && (
+          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="text-sm text-gray-700">
+                  Showing {startIndex + 1} to {Math.min(endIndex, filteredSales.length)} of {filteredSales.length} results
+                </div>
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm text-gray-700">Items per page:</label>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPageNum(1);
+                    }}
+                    className="border border-gray-300 rounded px-2 py-1 text-sm"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handlePageChange(currentPageNum - 1)}
+                  disabled={currentPageNum === 1}
+                  className={`px-3 py-1 rounded-md text-sm font-medium ${
+                    currentPageNum === 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  Previous
+                </button>
+                
+                {/* Page Numbers */}
+                <div className="flex space-x-1">
+                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPageNum <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPageNum >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPageNum - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => handlePageChange(pageNum)}
+                        className={`px-3 py-1 rounded-md text-sm font-medium ${
+                          currentPageNum === pageNum
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                <button
+                  onClick={() => handlePageChange(currentPageNum + 1)}
+                  disabled={currentPageNum === totalPages}
+                  className={`px-3 py-1 rounded-md text-sm font-medium ${
+                    currentPageNum === totalPages
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  }`}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

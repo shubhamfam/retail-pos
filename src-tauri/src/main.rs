@@ -75,6 +75,7 @@ fn main() {
             get_all_settings,
             export_products_to_csv,
             export_customers_to_csv,
+            export_salespersons_to_csv,
             import_products_from_csv,
             import_customers_from_csv,
             import_products_from_csv_content,
@@ -90,6 +91,7 @@ fn main() {
             get_active_license,
             is_license_expired,
             create_predefined_licenses,
+            create_sample_data,
             reset_license_system,
             debug_license_status,
             check_date_format,
@@ -299,14 +301,42 @@ async fn create_sale(
              customer_id, user_id, salesperson_id, total_amount, tax_amount, discount_amount, payment_method, status, items.len());
     
     let db = app_handle.state::<Database>();
-    let conn = db.connection.lock().unwrap();
+    let mut conn = db.connection.lock().unwrap();
     println!("Database connection acquired");
     
+    // Start transaction for atomic operation
+    let tx = conn.transaction().map_err(|e| {
+        println!("Error starting transaction: {}", e);
+        e.to_string()
+    })?;
+    
+    // Validate stock availability FIRST
+    println!("Validating stock for {} sale items...", items.len());
+    for item in items.iter() {
+        let current_stock: i32 = tx.query_row(
+            "SELECT stock_quantity FROM product_variants WHERE id = ?",
+            [item.product_variant_id],
+            |row| row.get(0)
+        ).map_err(|e| {
+            println!("Error checking stock for variant {}: {}", item.product_variant_id, e);
+            format!("Product variant {} not found", item.product_variant_id)
+        })?;
+        
+        if current_stock < item.quantity {
+            return Err(format!(
+                "Insufficient stock for product variant {}. Available: {}, Requested: {}", 
+                item.product_variant_id, current_stock, item.quantity
+            ));
+        }
+        println!("Stock validation passed for variant {}: {} available, {} requested", 
+                 item.product_variant_id, current_stock, item.quantity);
+    }
+
     // Create the sale using SaleService
     let sale_service = SaleService::new(db.connection.clone());
     println!("About to create sale...");
     let sale = sale_service.create_sale(
-        &conn,
+        &tx,
         customer_id,
         user_id,
         salesperson_id,
@@ -336,12 +366,29 @@ async fn create_sale(
             discount: 0.0, // Default discount
             total: item.total,
         };
-        sale_service.create_sale_item(&conn, &sale_item).map_err(|e| {
+        sale_service.create_sale_item(&tx, &sale_item).map_err(|e| {
             println!("Error creating sale item {}: {}", i+1, e);
             e.to_string()
         })?;
         println!("Sale item {} created successfully", i+1);
+        
+        // Decrement stock quantity
+        println!("Decrementing stock for product variant {} by {} units", item.product_variant_id, item.quantity);
+        tx.execute(
+            "UPDATE product_variants SET stock_quantity = stock_quantity - ? WHERE id = ?",
+            [item.quantity, item.product_variant_id]
+        ).map_err(|e| {
+            println!("Error updating stock for variant {}: {}", item.product_variant_id, e);
+            e.to_string()
+        })?;
+        println!("Stock decremented successfully for variant {}", item.product_variant_id);
     }
+
+    // Commit the transaction
+    tx.commit().map_err(|e| {
+        println!("Error committing transaction: {}", e);
+        e.to_string()
+    })?;
 
     println!("=== Backend create_sale END ===");
     Ok(sale)
@@ -648,10 +695,45 @@ async fn export_products_to_csv(app_handle: AppHandle, file_path: String) -> Res
     let db = app_handle.state::<Database>();
     let import_export_service = ImportExportService::new(db.connection.clone());
     
-    import_export_service.export_products_to_csv(&file_path)
+    // If file_path is empty, use automatic directory selection like templates
+    let final_file_path = if file_path.is_empty() {
+        // Try multiple directory options in order of preference
+        let target_dir = if let Some(docs) = dirs::document_dir() {
+            println!("📁 Using Documents directory for export: {}", docs.display());
+            docs
+        } else if let Ok(current) = std::env::current_dir() {
+            println!("📁 Using current directory for export: {}", current.display());
+            current
+        } else if let Some(home) = dirs::home_dir() {
+            println!("📁 Using home directory for export: {}", home.display());
+            home
+        } else {
+            println!("📁 Using temp directory for export");
+            std::env::temp_dir()
+        };
+        
+        // Ensure the target directory exists
+        if !target_dir.exists() {
+            println!("📂 Creating directory for export: {}", target_dir.display());
+            std::fs::create_dir_all(&target_dir)
+                .map_err(|e| format!("Failed to create directory {}: {}", target_dir.display(), e))?;
+        }
+        
+        // Create the file path with timestamp
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let file_path = target_dir.join(format!("products_export_{}.csv", timestamp));
+        
+        file_path.to_str()
+            .ok_or_else(|| "Failed to convert file path to string".to_string())?
+            .to_string()
+    } else {
+        file_path
+    };
+    
+    import_export_service.export_products_to_csv(&final_file_path)
         .map_err(|e| e.to_string())?;
     
-    Ok(format!("Products exported successfully to {}", file_path))
+    Ok(format!("Products exported successfully to {}", final_file_path))
 }
 
 #[tauri::command]
@@ -659,10 +741,91 @@ async fn export_customers_to_csv(app_handle: AppHandle, file_path: String) -> Re
     let db = app_handle.state::<Database>();
     let import_export_service = ImportExportService::new(db.connection.clone());
     
-    import_export_service.export_customers_to_csv(&file_path)
+    // If file_path is empty, use automatic directory selection like templates
+    let final_file_path = if file_path.is_empty() {
+        // Try multiple directory options in order of preference
+        let target_dir = if let Some(docs) = dirs::document_dir() {
+            println!("📁 Using Documents directory for export: {}", docs.display());
+            docs
+        } else if let Ok(current) = std::env::current_dir() {
+            println!("📁 Using current directory for export: {}", current.display());
+            current
+        } else if let Some(home) = dirs::home_dir() {
+            println!("📁 Using home directory for export: {}", home.display());
+            home
+        } else {
+            println!("📁 Using temp directory for export");
+            std::env::temp_dir()
+        };
+        
+        // Ensure the target directory exists
+        if !target_dir.exists() {
+            println!("📂 Creating directory for export: {}", target_dir.display());
+            std::fs::create_dir_all(&target_dir)
+                .map_err(|e| format!("Failed to create directory {}: {}", target_dir.display(), e))?;
+        }
+        
+        // Create the file path with timestamp
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let file_path = target_dir.join(format!("customers_export_{}.csv", timestamp));
+        
+        file_path.to_str()
+            .ok_or_else(|| "Failed to convert file path to string".to_string())?
+            .to_string()
+    } else {
+        file_path
+    };
+    
+    import_export_service.export_customers_to_csv(&final_file_path)
         .map_err(|e| e.to_string())?;
     
-    Ok(format!("Customers exported successfully to {}", file_path))
+    Ok(format!("Customers exported successfully to {}", final_file_path))
+}
+
+#[tauri::command]
+async fn export_salespersons_to_csv(app_handle: AppHandle, file_path: String) -> Result<String, String> {
+    let db = app_handle.state::<Database>();
+    let import_export_service = ImportExportService::new(db.connection.clone());
+    
+    // If file_path is empty, use automatic directory selection like templates
+    let final_file_path = if file_path.is_empty() {
+        // Try multiple directory options in order of preference
+        let target_dir = if let Some(docs) = dirs::document_dir() {
+            println!("📁 Using Documents directory for export: {}", docs.display());
+            docs
+        } else if let Ok(current) = std::env::current_dir() {
+            println!("📁 Using current directory for export: {}", current.display());
+            current
+        } else if let Some(home) = dirs::home_dir() {
+            println!("📁 Using home directory for export: {}", home.display());
+            home
+        } else {
+            println!("📁 Using temp directory for export");
+            std::env::temp_dir()
+        };
+        
+        // Ensure the target directory exists
+        if !target_dir.exists() {
+            println!("📂 Creating directory for export: {}", target_dir.display());
+            std::fs::create_dir_all(&target_dir)
+                .map_err(|e| format!("Failed to create directory {}: {}", target_dir.display(), e))?;
+        }
+        
+        // Create the file path with timestamp
+        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        let file_path = target_dir.join(format!("salespersons_export_{}.csv", timestamp));
+        
+        file_path.to_str()
+            .ok_or_else(|| "Failed to convert file path to string".to_string())?
+            .to_string()
+    } else {
+        file_path
+    };
+    
+    import_export_service.export_salespersons_to_csv(&final_file_path)
+        .map_err(|e| e.to_string())?;
+    
+    Ok(format!("Salespersons exported successfully to {}", final_file_path))
 }
 
 #[tauri::command]
@@ -756,23 +919,23 @@ async fn generate_customer_template(app_handle: AppHandle, file_path: String) ->
 }
 
 #[tauri::command]
-async fn save_template_with_dialog(app_handle: AppHandle, templateType: String) -> Result<String, String> {
+async fn save_template_with_dialog(app_handle: AppHandle, template_type: String) -> Result<String, String> {
     let db = app_handle.state::<Database>();
     let import_export_service = ImportExportService::new(db.connection.clone());
     
     // Debug: Log the template type
-    println!("🔍 Generating template for type: '{}'", templateType);
-    println!("🔍 Template type length: {}", templateType.len());
+    println!("🔍 Generating template for type: '{}'", template_type);
+    println!("🔍 Template type length: {}", template_type.len());
     
     // Validate and fix template type
-    let templateType = if templateType.is_empty() {
+    let template_type = if template_type.is_empty() {
         println!("❌ Template type is empty! Using 'products' as fallback");
         "products".to_string()
     } else {
-        templateType
+        template_type
     };
     
-    println!("🔍 Final template type: '{}'", templateType);
+    println!("🔍 Final template type: '{}'", template_type);
     
     // Try multiple directory options in order of preference
     let target_dir = if let Some(docs) = dirs::document_dir() {
@@ -801,7 +964,7 @@ async fn save_template_with_dialog(app_handle: AppHandle, templateType: String) 
     }
     
     // Create the file path in target directory
-    let file_path = target_dir.join(format!("{}_template.csv", templateType));
+    let file_path = target_dir.join(format!("{}_template.csv", template_type));
     println!("📄 Target file path: {}", file_path.display());
     
     // Convert path to string safely
@@ -817,10 +980,10 @@ async fn save_template_with_dialog(app_handle: AppHandle, templateType: String) 
     if file_path_str.is_empty() {
         println!("❌ File path is empty! Using fallback path");
         // Emergency fallback - try current directory with simple name
-        let fallback_path = format!("{}_template.csv", templateType);
+        let fallback_path = format!("{}_template.csv", template_type);
         println!("🔄 Using fallback path: {}", fallback_path);
         
-        match templateType.as_str() {
+        match template_type.as_str() {
             "products" => {
                 import_export_service.generate_product_template(&fallback_path)
                     .map_err(|e| format!("Failed to generate product template with fallback: {}", e))?;
@@ -832,7 +995,7 @@ async fn save_template_with_dialog(app_handle: AppHandle, templateType: String) 
     }
     
     // Generate the template
-    match templateType.as_str() {
+    match template_type.as_str() {
         "products" => {
             import_export_service.generate_product_template(file_path_str)
                 .map_err(|e| format!("Failed to generate product template: {}", e))?;
@@ -1277,7 +1440,140 @@ async fn create_settings_table(app_handle: AppHandle) -> Result<String, String> 
     }
 }
 
-
-
+#[tauri::command]
+async fn create_sample_data(app_handle: AppHandle) -> Result<String, String> {
+    let db = app_handle.state::<Database>();
+    let product_service = ProductService::new(db.connection.clone());
+    
+    println!("Creating sample data...");
+    
+    // Create sample products with variants
+    let sample_products = vec![
+        (
+            Product {
+                id: None,
+                name: "Cotton T-Shirt".to_string(),
+                brand: "Fashion Brand".to_string(),
+                category: "Clothing".to_string(),
+                subcategory: "T-Shirts".to_string(),
+                description: Some("Comfortable cotton t-shirt".to_string()),
+                base_price: 500.0,
+                cost_price: 300.0,
+                barcode: Some("1234567890123".to_string()),
+                created_at: None,
+                updated_at: None,
+            },
+            vec![
+                ("S", "Blue", "TSHIRT-S-BLUE", 25),
+                ("M", "Blue", "TSHIRT-M-BLUE", 30),
+                ("L", "Blue", "TSHIRT-L-BLUE", 20),
+                ("S", "Red", "TSHIRT-S-RED", 15),
+                ("M", "Red", "TSHIRT-M-RED", 25),
+            ]
+        ),
+        (
+            Product {
+                id: None,
+                name: "Denim Jeans".to_string(),
+                brand: "Denim Co".to_string(),
+                category: "Clothing".to_string(),
+                subcategory: "Jeans".to_string(),
+                description: Some("Classic denim jeans".to_string()),
+                base_price: 1200.0,
+                cost_price: 800.0,
+                barcode: Some("1234567890124".to_string()),
+                created_at: None,
+                updated_at: None,
+            },
+            vec![
+                ("28", "Blue", "JEANS-28-BLUE", 10),
+                ("30", "Blue", "JEANS-30-BLUE", 15),
+                ("32", "Blue", "JEANS-32-BLUE", 12),
+                ("28", "Black", "JEANS-28-BLACK", 8),
+                ("30", "Black", "JEANS-30-BLACK", 10),
+            ]
+        ),
+        (
+            Product {
+                id: None,
+                name: "Casual Shirt".to_string(),
+                brand: "Shirt Co".to_string(),
+                category: "Clothing".to_string(),
+                subcategory: "Shirts".to_string(),
+                description: Some("Casual cotton shirt".to_string()),
+                base_price: 800.0,
+                cost_price: 500.0,
+                barcode: Some("1234567890125".to_string()),
+                created_at: None,
+                updated_at: None,
+            },
+            vec![
+                ("S", "White", "SHIRT-S-WHITE", 20),
+                ("M", "White", "SHIRT-M-WHITE", 25),
+                ("L", "White", "SHIRT-L-WHITE", 18),
+                ("M", "Blue", "SHIRT-M-BLUE", 15),
+            ]
+        ),
+    ];
+    
+    let mut created_count = 0;
+    
+    for (product, variants) in sample_products {
+        // Create the product
+        match product_service.create_product(&product) {
+            Ok(product_id) => {
+                println!("Created product: {} with ID: {}", product.name, product_id);
+                
+                // Create variants for this product
+                for (size, color, sku, stock) in variants {
+                    let variant = ProductVariant {
+                        id: None,
+                        product_id,
+                        size: size.to_string(),
+                        color: color.to_string(),
+                        sku: sku.to_string(),
+                        stock_quantity: stock,
+                        price_adjustment: 0.0,
+                        image_url: None,
+                    };
+                    
+                    match product_service.create_product_variant(&variant) {
+                        Ok(variant_id) => {
+                            println!("Created variant: {} with ID: {}", sku, variant_id);
+                            created_count += 1;
+                        },
+                        Err(e) => {
+                            println!("Error creating variant {}: {}", sku, e);
+                        }
+                    }
+                }
+            },
+            Err(e) => {
+                println!("Error creating product {}: {}", product.name, e);
+            }
+        }
+    }
+    
+    // Create a default user if none exists
+    let user_service = UserService::new(db.connection.clone());
+    match user_service.get_user_by_id(1) {
+        Ok(_) => {
+            println!("Default user already exists");
+        },
+        Err(_) => {
+            // Create default user using the existing method
+            match user_service.create_default_user() {
+                Ok(user_id) => {
+                    println!("Created default user with ID: {}", user_id);
+                },
+                Err(e) => {
+                    println!("Error creating default user: {}", e);
+                }
+            }
+        }
+    }
+    
+    Ok(format!("Sample data created successfully! Created {} product variants.", created_count))
+}
 
 

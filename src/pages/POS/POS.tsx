@@ -66,6 +66,68 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
     color: 'Default'
   });
 
+  const [storeSettings, setStoreSettings] = useState({
+    name: 'posly',
+    address: '123 Main Street, City, State 12345',
+    phone: '+91 98765 43210',
+    email: 'info@posly.com',
+    gstNumber: 'GST123456789'
+  });
+
+  // Function to refresh store settings
+  const refreshStoreSettings = async () => {
+    try {
+      console.log('Refreshing store settings...');
+      const settingsData = await DatabaseService.getAllSettings();
+      const settingsMap = new Map(settingsData.map(s => [s.key, s.value]));
+      
+      const newStoreSettings = {
+        name: settingsMap.get('store_name') || 'posly',
+        address: settingsMap.get('store_address') || '123 Main Street, City, State 12345',
+        phone: settingsMap.get('store_phone') || '+91 98765 43210',
+        email: settingsMap.get('store_email') || 'info@posly.com',
+        gstNumber: settingsMap.get('store_gst_number') || 'GST123456789'
+      };
+      
+      console.log('Refreshed store settings:', newStoreSettings);
+      setStoreSettings(newStoreSettings);
+    } catch (error) {
+      console.error('Error refreshing store settings:', error);
+    }
+  };
+
+  // Function to refresh product data and variants
+  const refreshProductData = async () => {
+    try {
+      console.log('Refreshing product data...');
+      const productsData = await DatabaseService.getProducts();
+      setProducts(productsData);
+      
+      // Refresh product variants for all products
+      const variantPromises = productsData.map(async (product) => {
+        try {
+          const variants = await DatabaseService.getProductVariants(product.id);
+          return { productId: product.id, variants };
+        } catch (error) {
+          console.error(`Error loading variants for product ${product.id}:`, error);
+          return { productId: product.id, variants: [] };
+        }
+      });
+      
+      const variantResults = await Promise.all(variantPromises);
+      const newProductVariants: { [productId: number]: ProductVariant[] } = {};
+      
+      variantResults.forEach(({ productId, variants }) => {
+        newProductVariants[productId] = variants;
+      });
+      
+      setProductVariants(newProductVariants);
+      console.log('Product data refreshed successfully');
+    } catch (error) {
+      console.error('Error refreshing product data:', error);
+    }
+  };
+
   // Salesperson state
   const [salespersons, setSalespersons] = useState<Salesperson[]>([]);
   const [selectedSalesperson, setSelectedSalesperson] = useState<number | null>(null);
@@ -75,17 +137,35 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
     console.log('Modal state changed:', showPaymentModal);
   }, [showPaymentModal]);
 
-  // Load products and customers
+  // Load products, customers, and store settings
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [productsData, customersData] = await Promise.all([
+        const [productsData, customersData, settingsData] = await Promise.all([
           DatabaseService.getProducts(),
-          DatabaseService.getCustomers()
+          DatabaseService.getCustomers(),
+          DatabaseService.getAllSettings()
         ]);
         setProducts(productsData);
         setCustomers(customersData);
+        
+        // Load store settings
+        const settingsMap = new Map(settingsData.map(s => [s.key, s.value]));
+        console.log('=== LOADING STORE SETTINGS ===');
+        console.log('All settings from DB:', settingsData);
+        console.log('Settings map:', Object.fromEntries(settingsMap));
+        
+        const newStoreSettings = {
+          name: settingsMap.get('store_name') || 'posly',
+          address: settingsMap.get('store_address') || '123 Main Street, City, State 12345',
+          phone: settingsMap.get('store_phone') || '+91 98765 43210',
+          email: settingsMap.get('store_email') || 'info@posly.com',
+          gstNumber: settingsMap.get('store_gst_number') || 'GST123456789'
+        };
+        
+        console.log('Store settings loaded:', newStoreSettings);
+        setStoreSettings(newStoreSettings);
         
         // Set frequently used products (first 8 products for demo)
         setFrequentlyUsedProducts(productsData.slice(0, 8));
@@ -515,13 +595,18 @@ const POS: React.FC<POSProps> = ({ setCurrentPage, user }) => {
       
       // Print receipt
       console.log('Printing receipt...');
+      console.log('=== STORE SETTINGS FOR RECEIPT ===');
+      console.log('Current storeSettings state:', storeSettings);
+      
       const storeInfo = {
-        name: 'posly',
-        address: '123 Main Street, City, State 12345',
-        phone: '+91 98765 43210',
-        email: 'info@posly.com',
-        gstNumber: 'GST123456789'
+        name: storeSettings.name,
+        address: storeSettings.address,
+        phone: storeSettings.phone,
+        email: storeSettings.email,
+        gstNumber: storeSettings.gstNumber
       };
+      
+      console.log('StoreInfo for receipt:', storeInfo);
 
       const receiptData = {
         sale: {

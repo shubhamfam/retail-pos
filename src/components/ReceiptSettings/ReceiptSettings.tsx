@@ -31,11 +31,32 @@ const ReceiptSettingsComponent: React.FC = () => {
   }, [settings, activeTemplate]);
 
   const loadTemplates = () => {
+    // One-time cleanup - TODO: Remove this after running once
+    if (localStorage.getItem('cleanup_done') !== 'true') {
+      ReceiptSettingsService.oneTimeCleanup();
+      localStorage.setItem('cleanup_done', 'true');
+    }
+    
     const loadedTemplates = ReceiptSettingsService.loadTemplates();
     setTemplates(loadedTemplates);
     const active = ReceiptSettingsService.getActiveTemplate();
     setActiveTemplate(active);
-    setSettings(active.settings);
+    
+    // Ensure critical settings are always correct
+    const correctedSettings = {
+      ...active.settings,
+      showTaxBreakdown: true,
+      taxDisplay: 'inclusive' as 'inclusive' | 'exclusive'
+    };
+    
+    console.log('Loading settings:', correctedSettings);
+    setSettings(correctedSettings);
+    
+    // Save the corrected settings immediately
+    if (active && (active.settings.showTaxBreakdown !== true || active.settings.taxDisplay !== 'inclusive')) {
+      ReceiptSettingsService.updateTemplate(active.id, { settings: correctedSettings });
+      console.log('Auto-saved corrected settings');
+    }
   };
 
   const handleSaveSettings = () => {
@@ -113,12 +134,14 @@ const ReceiptSettingsComponent: React.FC = () => {
           <div className="bg-gray-50 p-4 rounded-lg">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Templates</h3>
+              {/* Hide + New button for now - will add back in later version
               <button
                 onClick={() => setShowTemplateModal(true)}
                 className="bg-blue-500 text-white px-3 py-1 rounded text-sm"
               >
                 + New
               </button>
+              */}
             </div>
             
             <div className="space-y-2">
@@ -176,58 +199,6 @@ const ReceiptSettingsComponent: React.FC = () => {
         {/* Settings Form */}
         <div className="lg:col-span-2">
           <div className="space-y-6">
-            {/* Store Information */}
-            <div className="bg-white border rounded-lg p-4">
-              <h3 className="text-lg font-semibold mb-4">Store Information</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Store Name</label>
-                  <input
-                    type="text"
-                    value={settings.storeName}
-                    onChange={(e) => setSettings({ ...settings, storeName: e.target.value })}
-                    className="w-full border rounded px-3 py-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Store Address</label>
-                  <input
-                    type="text"
-                    value={settings.storeAddress}
-                    onChange={(e) => setSettings({ ...settings, storeAddress: e.target.value })}
-                    className="w-full border rounded px-3 py-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Phone</label>
-                  <input
-                    type="text"
-                    value={settings.storePhone}
-                    onChange={(e) => setSettings({ ...settings, storePhone: e.target.value })}
-                    className="w-full border rounded px-3 py-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={settings.storeEmail}
-                    onChange={(e) => setSettings({ ...settings, storeEmail: e.target.value })}
-                    className="w-full border rounded px-3 py-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">GST Number</label>
-                  <input
-                    type="text"
-                    value={settings.storeGST}
-                    onChange={(e) => setSettings({ ...settings, storeGST: e.target.value })}
-                    className="w-full border rounded px-3 py-2"
-                  />
-                </div>
-              </div>
-            </div>
-
             {/* Receipt Configuration */}
             <div className="bg-white border rounded-lg p-4">
               <h3 className="text-lg font-semibold mb-4">Receipt Configuration</h3>
@@ -257,11 +228,13 @@ const ReceiptSettingsComponent: React.FC = () => {
                   <select
                     value={settings.taxDisplay}
                     onChange={(e) => setSettings({ ...settings, taxDisplay: e.target.value as 'inclusive' | 'exclusive' })}
-                    className="w-full border rounded px-3 py-2"
+                    className="w-full border rounded px-3 py-2 bg-gray-100 cursor-not-allowed"
+                    disabled
                   >
                     <option value="exclusive">Exclusive</option>
                     <option value="inclusive">Inclusive</option>
                   </select>
+                  <p className="text-xs text-gray-500 mt-1">This setting is locked for consistency</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Font Size</label>
@@ -291,14 +264,16 @@ const ReceiptSettingsComponent: React.FC = () => {
                   />
                   Print Header
                 </label>
-                <label className="flex items-center">
+                <label className="flex items-center opacity-50 cursor-not-allowed">
                   <input
                     type="checkbox"
                     checked={settings.showTaxBreakdown}
                     onChange={(e) => setSettings({ ...settings, showTaxBreakdown: e.target.checked })}
                     className="mr-2"
+                    disabled
                   />
                   Show Tax Breakdown
+                  <span className="ml-2 text-xs text-gray-500">(locked)</span>
                 </label>
                 <label className="flex items-center">
                   <input
@@ -421,11 +396,11 @@ const ReceiptSettingsComponent: React.FC = () => {
                     }
                   ],
                   storeInfo: {
-                    name: settings.storeName,
-                    address: settings.storeAddress,
-                    phone: settings.storePhone,
-                    email: settings.storeEmail,
-                    gstNumber: settings.storeGST
+                    name: 'Your Store Name',
+                    address: 'Your Store Address',
+                    phone: 'Your Phone Number',
+                    email: 'your@email.com',
+                    gstNumber: 'Your GST Number'
                   }
                 };
                 

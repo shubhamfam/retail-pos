@@ -23,7 +23,7 @@ export interface ReceiptData {
 
 export class ReceiptService {
   static generateReceipt(data: ReceiptData, template?: ReceiptTemplate): string {
-    const { sale, customer, items } = data;
+    const { sale, customer, items, storeInfo } = data;
     const date = new Date(sale.created_at).toLocaleDateString('en-IN');
     const time = new Date(sale.created_at).toLocaleTimeString('en-IN');
     
@@ -34,6 +34,14 @@ export class ReceiptService {
     // Calculate subtotal from items
     const subtotal = items.reduce((sum, item) => sum + item.total, 0);
     
+    // Debug logging
+    console.log('=== RECEIPT DEBUG ===');
+    console.log('Tax Display Mode:', settings.taxDisplay);
+    console.log('Items subtotal (sum of item.total):', subtotal);
+    console.log('Sale total_amount:', sale.total_amount);
+    console.log('Sale tax_amount:', sale.tax_amount);
+    console.log('Sale discount_amount:', sale.discount_amount);
+    
     // Handle tax display logic - Clear and non-confusing approach
     let displaySubtotal: number;
     let displayTax: number;
@@ -41,18 +49,24 @@ export class ReceiptService {
     let showTaxLine: boolean;
     
     if (settings.taxDisplay === 'inclusive') {
-      // TAX INCLUSIVE: Prices already include tax
-      displaySubtotal = sale.total_amount; // Final amount (tax included)
+      // TAX INCLUSIVE: When tax is included in item prices, still show breakdown correctly
+      displaySubtotal = sale.total_amount - sale.tax_amount + sale.discount_amount; // Base amount before tax
       displayTax = sale.tax_amount; // Tax amount for breakdown
-      displayTotal = sale.total_amount; // Same as subtotal
+      displayTotal = sale.total_amount; // Final amount (tax included)
       showTaxLine = settings.showTaxBreakdown && sale.tax_amount > 0; // Only show if breakdown is enabled
     } else {
       // TAX EXCLUSIVE: Prices are before tax
       displaySubtotal = subtotal; // Base amount before tax
       displayTax = sale.tax_amount; // Tax to be added
-      displayTotal = subtotal + sale.tax_amount; // Final amount = subtotal + tax
+      displayTotal = sale.total_amount; // Final amount = subtotal + tax - discount
       showTaxLine = settings.showTaxBreakdown && sale.tax_amount > 0; // Only show if breakdown is enabled
     }
+    
+    // Debug the final display values
+    console.log('Display Subtotal:', displaySubtotal);
+    console.log('Display Tax:', displayTax);
+    console.log('Display Total:', displayTotal);
+    console.log('=== END RECEIPT DEBUG ===');
     
     // Define receipt width from settings
     const receiptWidth = settings.receiptWidth;
@@ -129,11 +143,11 @@ export class ReceiptService {
 
     // Store information with wrapping
     if (settings.printHeader) {
-      const storeNameLines = wrapText(settings.storeName, receiptWidth);
-      const storeAddressLines = wrapText(settings.storeAddress, receiptWidth);
-      const storePhoneLines = wrapText(`Phone: ${settings.storePhone}`, receiptWidth);
-      const storeEmailLines = wrapText(`Email: ${settings.storeEmail}`, receiptWidth);
-      const storeGstLines = wrapText(`GST: ${settings.storeGST}`, receiptWidth);
+      const storeNameLines = wrapText(storeInfo.name, receiptWidth);
+      const storeAddressLines = wrapText(storeInfo.address, receiptWidth);
+      const storePhoneLines = wrapText(`Phone: ${storeInfo.phone}`, receiptWidth);
+      const storeEmailLines = wrapText(`Email: ${storeInfo.email}`, receiptWidth);
+      const storeGstLines = wrapText(`GST: ${storeInfo.gstNumber}`, receiptWidth);
       
       // Add all store info lines
       storeNameLines.forEach(line => {
